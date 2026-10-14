@@ -56,8 +56,10 @@
     </div>
 
     <div class="composer" id="composer" style="display:none">
-      <input type="file" id="fileInput" style="display:none" accept="image/*,video/*,.pdf,.doc,.docx,.zip,.rar,.txt">
-      <button class="attach-btn" id="attachBtn" title="پیوست فایل">📎</button>
+      <label class="attach-btn" for="fileInput" title="پیوست فایل">
+        📎
+        <input type="file" id="fileInput" accept="image/*,video/*,.pdf,.doc,.docx,.zip,.rar,.txt">
+      </label>
       <textarea id="messageInput" placeholder="پیامت را بنویس..." rows="1"></textarea>
       <button class="send-btn" id="sendBtn" disabled>📤</button>
     </div>

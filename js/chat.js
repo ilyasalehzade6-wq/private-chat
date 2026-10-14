@@ -74,8 +74,16 @@ async function init() {
   sendBtn.onclick = sendMessage;
 
   // دکمه ضمیمه
-  $('attachBtn').onclick = () => $('fileInput').click();
-  $('fileInput').onchange = (e) => handleFileSelect(e.target.files[0]);
+  // پیوست فایل - با input مستقیم
+  const fi = $('fileInput');
+  if (fi) {
+    fi.addEventListener('change', (e) => {
+      const f = e.target.files[0];
+      if (f) handleFileSelect(f);
+      e.target.value = '';  // ریست تا بشه دوباره همون فایل رو انتخاب کرد
+    });
+  }
+
   $('attachRemove').onclick = clearAttachment;
 
   // Drag & Drop روی صفحه
