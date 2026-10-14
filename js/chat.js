@@ -2,6 +2,7 @@
 import { supabase } from './supabase-client.js';
 import { requireAuth, signOut, getProfile } from './auth.js';
 import { showToast, formatTime, escapeHtml, getInitials, avatarColor } from './ui.js';
+import { compressFile, formatSize as fmtSize } from './compressor.js';
 
 let currentUser = null;
 let currentProfile = null;
@@ -254,12 +255,7 @@ function renderMessage(msg) {
   area.appendChild(div);
 }
 
-function formatSize(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
-  return (bytes / 1024 / 1024 / 1024).toFixed(1) + ' GB';
-}
+const formatSize = fmtSize;
 
 function subscribeMessages() {
   if (messagesChannel) supabase.removeChannel(messagesChannel);
@@ -301,11 +297,6 @@ function checkEmpty() {
 function handleFileSelect(file) {
   if (!file) return;
   if (!currentConversation) { showToast('اول یک گفتگو را انتخاب کن', 'error'); return; }
-  const maxSize = 25 * 1024 * 1024; // ۲۵ مگابایت
-  if (file.size > maxSize) {
-    showToast('حجم فایل بیش از ۲۵ مگابایت است', 'error');
-    return;
-  }
 
   let type = 'file';
   if (file.type.startsWith('image/')) type = 'image';
@@ -361,27 +352,61 @@ function clearAttachment() {
 
 async function uploadAttachment() {
   if (!pendingAttachment) return null;
-  const { file } = pendingAttachment;
+  const { file, type } = pendingAttachment;
+
+  // فشرده‌سازی
+  const sendBtn = $('sendBtn');
+  const originalText = sendBtn.textContent;
+
+  let compressedFile = file;
+  try {
+    const result = await compressFile(
+      file,
+      (status) => {
+        sendBtn.textContent = '⏳';
+        $('typingIndicator').textContent = status;
+      },
+      (progress) => {
+        $('typingIndicator').textContent = 'فشرده‌سازی فیلم: ' + progress + '%';
+      }
+    );
+    compressedFile = result.file;
+
+    if (result.compressed) {
+      const saved = result.originalSize - result.newSize;
+      const pct = Math.round((saved / result.originalSize) * 100);
+      showToast('فشرده شد: ' + fmtSize(result.originalSize) + ' → ' + fmtSize(result.newSize) + ' (کاهش ' + pct + '%)', 'success');
+    }
+  } catch (err) {
+    sendBtn.textContent = originalText;
+    $('typingIndicator').textContent = '';
+    throw new Error(err.message || 'فشرده‌سازی شکست خورد');
+  }
+
+  $('typingIndicator').textContent = 'در حال آپلود...';
+
   const ts = Date.now();
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const safeName = compressedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const path = currentUser.id + '/' + currentConversation.id + '/' + ts + '-' + safeName;
 
   const { data, error } = await supabase.storage
     .from(BUCKET)
-    .upload(path, file, {
+    .upload(path, compressedFile, {
       cacheControl: '3600',
       upsert: false,
-      contentType: file.type
+      contentType: compressedFile.type
     });
 
   if (error) throw error;
 
+  $('typingIndicator').textContent = '';
+
   const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return {
     url: pub.publicUrl,
-    type: pendingAttachment.type,
-    name: file.name,
-    size: file.size,
+    type: type,
+    name: compressedFile.name,
+    size: compressedFile.size,
     path: path
   };
 }
