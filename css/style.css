@@ -442,3 +442,41 @@ label.attach-btn input[type="file"] {
   opacity: 0;
   cursor: pointer;
 }
+
+/* ═══════════════════════════════════════════
+   FIX v3: مخفی کردن قطعی input فایل
+   ═══════════════════════════════════════════ */
+.composer input[type="file"]#fileInput {
+  display: none !important;
+  position: absolute !important;
+  left: -9999px !important;
+  width: 0 !important;
+  height: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* اطمینان از اینکه label یا button درست نمایش داده شود */
+.attach-btn {
+  width: 46px !important;
+  height: 46px !important;
+  min-width: 46px !important;
+  max-width: 46px !important;
+  border-radius: 14px !important;
+  border: 1.5px solid var(--border) !important;
+  background: var(--card) !important;
+  color: var(--text) !important;
+  font-size: 20px !important;
+  cursor: pointer !important;
+  transition: all .2s !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  padding: 0 !important;
+}
+.attach-btn:hover {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+  transform: translateY(-2px) !important;
+}
