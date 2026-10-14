@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>چت — پیام‌رسان خصوصی</title>
 <link rel="manifest" href="./manifest.json">
+<link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
 <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
@@ -20,8 +21,14 @@
       <button class="icon-btn" id="themeBtn" title="تغییر تم">🌙</button>
       <button class="icon-btn" id="logoutBtn" title="خروج">🚪</button>
     </div>
+    <div class="rubika-tabs">
+      <button class="active" data-tab="all">همه</button>
+      <button data-tab="unread">خوانده‌نشده</button>
+      <button data-tab="online">آنلاین</button>
+    </div>
+
     <div class="search-box">
-      <input type="text" id="searchInput" placeholder="🔍 جستجوی کاربر...">
+      <input type="text" id="searchInput" placeholder="جستجوی کاربر...">
     </div>
     <div class="user-list" id="userList">
       <div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">
