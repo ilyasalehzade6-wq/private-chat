@@ -47,11 +47,26 @@
 
     <div class="typing-indicator" id="typingIndicator"></div>
 
+    <div class="attachment-preview" id="attachmentPreview" style="display:none">
+      <div class="attachment-preview-inner">
+        <div id="attachPreviewContent"></div>
+        <div class="attachment-info" id="attachInfo"></div>
+      </div>
+      <button class="attach-remove" id="attachRemove" title="حذف ضمیمه">✕</button>
+    </div>
+
     <div class="composer" id="composer" style="display:none">
+      <input type="file" id="fileInput" style="display:none" accept="image/*,video/*,.pdf,.doc,.docx,.zip,.rar,.txt">
+      <button class="attach-btn" id="attachBtn" title="پیوست فایل">📎</button>
       <textarea id="messageInput" placeholder="پیامت را بنویس..." rows="1"></textarea>
       <button class="send-btn" id="sendBtn" disabled>📤</button>
     </div>
   </main>
+</div>
+
+<div class="lightbox" id="lightbox">
+  <button class="lightbox-close" id="lightboxClose">✕</button>
+  <img id="lightboxImg" src="" alt="">
 </div>
 
 <div class="toast" id="toast"></div>
