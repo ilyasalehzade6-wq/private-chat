@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>چت — پیام‌رسان خصوصی</title>
+<link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+<div class="chat-app">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">💬</div>
+      <div class="info">
+        <h3 id="myName">...</h3>
+        <p id="myStatus">آنلاین</p>
+      </div>
+      <button class="icon-btn" id="themeBtn" title="تغییر تم">🌙</button>
+      <button class="icon-btn" id="logoutBtn" title="خروج">🚪</button>
+    </div>
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="🔍 جستجوی کاربر...">
+    </div>
+    <div class="user-list" id="userList">
+      <div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">
+        در حال بارگذاری کاربران...
+      </div>
+    </div>
+  </aside>
+
+  <main class="chat-area">
+    <div class="chat-header" id="chatHeader" style="display:none">
+      <button class="icon-btn back-btn" id="backBtn">←</button>
+      <div class="avatar" id="chatAvatar"></div>
+      <div class="info">
+        <h3 id="chatName"></h3>
+        <p id="chatStatus"></p>
+      </div>
+    </div>
+
+    <div class="messages-area" id="messagesArea">
+      <div class="empty-chat">
+        <div class="big-icon">💬</div>
+        <p>یک کاربر را از لیست انتخاب کن تا چت شروع شود</p>
+      </div>
+    </div>
+
+    <div class="typing-indicator" id="typingIndicator"></div>
+
+    <div class="composer" id="composer" style="display:none">
+      <textarea id="messageInput" placeholder="پیامت را بنویس..." rows="1"></textarea>
+      <button class="send-btn" id="sendBtn" disabled>📤</button>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<script type="module" src="./js/chat.js"></script>
+</body>
+</html>

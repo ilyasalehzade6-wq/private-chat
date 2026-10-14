@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ورود — پیام‌رسان خصوصی</title>
+<link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">💬</div>
+    <h1>پیام‌رسان خصوصی</h1>
+    <p class="sub">برای خودت و دوستت — امن و سریع</p>
+
+    <div class="auth-tabs">
+      <button id="tabLogin" class="active">ورود</button>
+      <button id="tabSignup">ثبت‌نام</button>
+    </div>
+
+    <div id="errorBox" class="error-box"></div>
+    <div id="successBox" class="success-box"></div>
+
+    <form id="loginForm">
+      <div class="form-group">
+        <label>ایمیل</label>
+        <input type="email" id="loginEmail" required placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label>رمز عبور</label>
+        <input type="password" id="loginPassword" required placeholder="••••••••">
+      </div>
+      <button type="submit" id="loginBtn" class="btn-primary">ورود</button>
+    </form>
+
+    <form id="signupForm" style="display:none">
+      <div class="form-group">
+        <label>نام کاربری (انگلیسی)</label>
+        <input type="text" id="signupUsername" required placeholder="ali_reza" pattern="[a-zA-Z0-9_]{3,20}">
+      </div>
+      <div class="form-group">
+        <label>نام نمایشی</label>
+        <input type="text" id="signupDisplayName" required placeholder="علی رضایی">
+      </div>
+      <div class="form-group">
+        <label>ایمیل</label>
+        <input type="email" id="signupEmail" required placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label>رمز عبور (حداقل ۶ کاراکتر)</label>
+        <input type="password" id="signupPassword" required minlength="6" placeholder="••••••••">
+      </div>
+      <button type="submit" id="signupBtn" class="btn-primary">ساخت حساب</button>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { signIn, signUp, redirectIfLoggedIn } from './js/auth.js';
+import { showToast, showError, hideError, setLoading } from './js/ui.js';
+
+redirectIfLoggedIn();
+
+const tabLogin = document.getElementById('tabLogin');
+const tabSignup = document.getElementById('tabSignup');
+const loginForm = document.getElementById('loginForm');
+const signupForm = document.getElementById('signupForm');
+const errorBox = document.getElementById('errorBox');
+const successBox = document.getElementById('successBox');
+
+tabLogin.onclick = () => {
+  tabLogin.classList.add('active');
+  tabSignup.classList.remove('active');
+  loginForm.style.display = 'block';
+  signupForm.style.display = 'none';
+  hideError(errorBox); hideError(successBox);
+};
+
+tabSignup.onclick = () => {
+  tabSignup.classList.add('active');
+  tabLogin.classList.remove('active');
+  signupForm.style.display = 'block';
+  loginForm.style.display = 'none';
+  hideError(errorBox); hideError(successBox);
+};
+
+loginForm.onsubmit = async (e) => {
+  e.preventDefault();
+  hideError(errorBox);
+  const btn = document.getElementById('loginBtn');
+  setLoading(btn, true, 'در حال ورود...');
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const { error } = await signIn(email, password);
+  if (error) {
+    showError(errorBox, 'خطا در ورود: ' + error.message);
+    setLoading(btn, false);
+    return;
+  }
+  showToast('خوش آمدی!', 'success');
+  setTimeout(() => window.location.href = './chat.html', 400);
+};
+
+signupForm.onsubmit = async (e) => {
+  e.preventDefault();
+  hideError(errorBox); hideError(successBox);
+  const btn = document.getElementById('signupBtn');
+  setLoading(btn, true, 'در حال ساخت...');
+  const username = document.getElementById('signupUsername').value.trim();
+  const displayName = document.getElementById('signupDisplayName').value.trim();
+  const email = document.getElementById('signupEmail').value.trim();
+  const password = document.getElementById('signupPassword').value;
+  const { error } = await signUp({ email, password, username, displayName });
+  if (error) {
+    showError(errorBox, 'خطا در ثبت‌نام: ' + error.message);
+    setLoading(btn, false);
+    return;
+  }
+  successBox.textContent = '✅ حساب ساخته شد! حالا می‌توانی وارد شوی.';
+  successBox.style.display = 'block';
+  setLoading(btn, false);
+  showToast('ثبت‌نام موفق!', 'success');
+  setTimeout(() => {
+    tabLogin.click();
+    document.getElementById('loginEmail').value = email;
+  }, 1500);
+};
+</script>
+</body>
+</html>
