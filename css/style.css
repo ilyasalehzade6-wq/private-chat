@@ -1879,3 +1879,193 @@ body.dark .auth-page {
   border-radius: 12px; font-size: 13px; margin-bottom: 16px;
   border: 1px solid rgba(0, 212, 168, 0.25);
 }
+
+/* ═══════════════════════════════════════════
+   🎯 فاز ۱ گام ۲: Saved + Global Search
+   ═══════════════════════════════════════════ */
+
+.modal-wide { max-width: 560px; }
+
+/* Filter chips */
+.filter-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.filter-chips button {
+  padding: 7px 14px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s;
+}
+.filter-chips button:hover { border-color: var(--primary); color: var(--primary); }
+.filter-chips button.active {
+  background: var(--gradient);
+  color: #fff;
+  border-color: transparent;
+}
+
+/* Global results */
+.global-results {
+  max-height: 450px;
+  overflow-y: auto;
+}
+
+.global-result-item {
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg);
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all .15s;
+  border: 1.5px solid transparent;
+}
+.global-result-item:hover {
+  border-color: var(--primary);
+  background: var(--card);
+}
+
+.global-result-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.global-result-head .avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.global-result-head .avatar img { width: 100%; height: 100%; object-fit: cover; }
+.global-result-head .name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.global-result-head .time {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.global-result-text {
+  font-size: 13.5px;
+  color: var(--text);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.global-result-text mark {
+  background: rgba(255, 184, 77, .5);
+  color: inherit;
+  padding: 1px 3px;
+  border-radius: 4px;
+}
+
+.global-result-media {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Saved list */
+.saved-list {
+  max-height: 500px;
+  overflow-y: auto;
+  margin: 0 -4px;
+}
+
+.saved-item {
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg);
+  margin-bottom: 8px;
+  border: 1.5px solid transparent;
+  transition: all .15s;
+  position: relative;
+}
+.saved-item:hover {
+  border-color: var(--primary);
+}
+.saved-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.saved-item-head .source {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  flex: 1;
+}
+.saved-item-head .time {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.saved-item-head .del {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.saved-item-head .del:hover { background: rgba(244,67,54,.15); color: var(--danger); }
+
+.saved-item-body {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.saved-item-media {
+  margin-top: 8px;
+  border-radius: 10px;
+  overflow: hidden;
+  max-width: 240px;
+}
+.saved-item-media img,
+.saved-item-media video {
+  width: 100%;
+  height: auto;
+  display: block;
+  max-height: 200px;
+  object-fit: cover;
+}
+
+/* Saved badge in chat list */
+.chat-item.saved-item-chat .avatar {
+  background: linear-gradient(135deg, #FFB84D, #FF6B9D) !important;
+}
+
+/* Chat-item clickable for global search */
+.global-result-item .highlight {
+  animation: flash-search 1.5s ease;
+}
+@keyframes flash-search {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 0 3px var(--warning); }
+}
+
