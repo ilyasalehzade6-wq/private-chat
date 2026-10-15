@@ -29,6 +29,8 @@ let notificationGranted = false;
 let audioCtx = null;
 let searchResults = [];
 let searchIndex = 0;
+let draftTimers = {};           // { chatId: timer }
+let forwardedMessage = null;    // پیام در حال فوروارد
 
 // Voice recording
 let mediaRecorder = null;
@@ -90,6 +92,8 @@ async function init() {
   setupProfileModal();
   setupSearch();
   setupGroups();
+  setupForward();
+  renderChatList();
   subscribeGroups();
   setupVoice();
   setupScrollBottom();
@@ -98,6 +102,35 @@ async function init() {
   if ('Notification' in window && Notification.permission === 'granted') {
     notificationGranted = true;
   }
+}
+
+
+// ═══════════════════════════════════════════
+// 📝 Draft خودکار
+// ═══════════════════════════════════════════
+function draftKey() {
+  if (currentChatType === 'group' && currentGroup) return 'draft_group_' + currentGroup.id;
+  if (currentConversation) return 'draft_conv_' + currentConversation.id;
+  return null;
+}
+
+function saveDraft(text) {
+  const key = draftKey();
+  if (!key) return;
+  if (text && text.trim()) localStorage.setItem(key, text);
+  else localStorage.removeItem(key);
+}
+
+function loadDraft() {
+  const key = draftKey();
+  if (!key) return '';
+  return localStorage.getItem(key) || '';
+}
+
+function hasDraft(chatId, kind) {
+  const key = kind === 'group' ? 'draft_group_' + chatId : 'draft_conv_' + chatId;
+  const v = localStorage.getItem(key);
+  return v && v.trim() ? v : null;
 }
 
 // ═══════════════════ UI BINDINGS ═══════════════════
@@ -127,9 +160,13 @@ function setupUI() {
   $('callVoiceBtn').onclick = () => showToast('تماس صوتی به‌زودی 🔜');
   $('callVideoBtn').onclick = () => showToast('تماس تصویری به‌زودی 🔜');
   $('chatMenuBtn').onclick = (e) => {
+    const isMuted = currentChatType === 'group'
+      ? currentGroup?.muted
+      : currentConversation?.muted;
     showMenu(e, [
       { icon: '🔍', label: 'جستجو', action: () => toggleSearchBar(true) },
       { icon: '📌', label: 'پیام‌های پین', action: () => pinnedMsg && scrollToMessage(pinnedMsg.id) },
+      { icon: '🔕', label: isMuted ? 'صدادار کردن' : 'بی‌صدا کردن', action: toggleMute },
       { icon: '🗑', label: 'حذف گفتگو', action: () => showToast('به‌زودی'), danger: true }
     ]);
   };
@@ -351,8 +388,14 @@ function renderChatList() {
     let preview = 'شروع گفتگو...';
     let time = '';
     let tick = '';
+    let isDraft = false;
 
-    if (item.lastMessage) {
+    // چک draft
+    const draftText = hasDraft(item.kind === 'group' ? item.group.id : item.conversation?.id, item.kind);
+    if (draftText) {
+      preview = draftText;
+      isDraft = true;
+    } else if (item.lastMessage) {
       const m = item.lastMessage;
       let body = m.content;
       if (!body) {
@@ -381,7 +424,7 @@ function renderChatList() {
       }
     }
 
-    const previewClass = item.unread > 0 ? 'preview unread' : 'preview';
+    const previewClass = isDraft ? 'preview draft' : (item.unread > 0 ? 'preview unread' : 'preview');
     const dataId = isGroup ? 'group:' + item.group.id : 'user:' + item.otherUser.id;
 
     return '<div class="chat-item ' + extraClass + ' ' + active + '" data-id="' + dataId + '">' +
@@ -389,7 +432,10 @@ function renderChatList() {
       '<div class="body">' +
         '<div class="row1">' +
           '<div class="name">' + escapeHtml(name) + '</div>' +
-          '<div class="meta"><span>' + time + '</span></div>' +
+          '<div class="meta">' +
+            ((isGroup ? item.group.muted : item.conversation?.muted) ? '<span class="mute-icon">🔕</span>' : '') +
+            '<span>' + time + '</span>' +
+          '</div>' +
         '</div>' +
         '<div class="row2"><div class="' + previewClass + '">' + tick + escapeHtml(preview) + '</div></div>' +
       '</div>' +
@@ -473,6 +519,12 @@ async function selectUser(otherId) {
   await loadMessages();
   subscribeMessages();
   subscribeReactions();
+
+  // بارگذاری draft
+  $('messageInput').value = loadDraft();
+  $('messageInput').style.height = 'auto';
+  $('messageInput').style.height = Math.min($('messageInput').scrollHeight, 120) + 'px';
+  updateSendButton();
 
   setTimeout(() => $('messageInput').focus(), 200);
 }
@@ -578,6 +630,24 @@ function formatDateSeparator(dateStr) {
   } catch { return d.toLocaleDateString('fa-IR'); }
 }
 
+
+// ═══════════════════════════════════════════
+// 😊 Big Emoji
+// ═══════════════════════════════════════════
+function isBigEmoji(text) {
+  if (!text || text.length > 20) return false;
+  // فقط ایموجی و فاصله
+  const cleaned = text.replace(/[\s\u200d\ufe0f]/g, '');
+  if (!cleaned) return false;
+  // الگوی ایموجی (Unicode property)
+  const emojiRegex = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component})+$/u;
+  try {
+    return emojiRegex.test(cleaned) && [...cleaned].length <= 3;
+  } catch {
+    return false;
+  }
+}
+
 function renderMessage(msg, prevMsg) {
   const area = $('messagesArea');
   const empty = area.querySelector('.empty-chat');
@@ -593,6 +663,9 @@ function renderMessage(msg, prevMsg) {
 
   const div = document.createElement('div');
   div.className = 'message ' + (isMine ? 'mine' : 'theirs');
+  if (msg.content && isBigEmoji(msg.content) && !msg.attachment_url) {
+    div.classList.add('big-emoji');
+  }
   div.dataset.id = msg.id;
 
   // Reply
@@ -633,6 +706,9 @@ function renderMessage(msg, prevMsg) {
     }
   }
 
+  const forwardedHtml = msg.forwarded_from
+    ? '<div class="forwarded-badge">➡️ فوروارد شده از ' + escapeHtml(msg.forwarded_from_name || 'کاربر') + '</div>'
+    : '';
   const textHtml = msg.content ? '<span class="msg-text">' + escapeHtml(msg.content) + '</span>' : '';
   const editedHtml = msg.edited_at ? ' <span class="edited-mark">(ویرایش‌شده)</span>' : '';
 
@@ -663,7 +739,7 @@ function renderMessage(msg, prevMsg) {
     : '';
 
   div.innerHTML =
-    '<div class="bubble">' + senderNameHtml + replyHtml + attachHtml + textHtml +
+    '<div class="bubble">' + senderNameHtml + forwardedHtml + replyHtml + attachHtml + textHtml +
       '<span class="meta">' + editedHtml + formatTime(msg.created_at) + tickHtml + '</span>' +
     '</div>' +
     reactionsHtml;
@@ -842,6 +918,11 @@ function setupComposer() {
     updateSendButton();
     broadcastTyping();
     toggleVoiceBtn();
+    // ذخیره‌ی draft
+    clearTimeout(draftTimers._current);
+    draftTimers._current = setTimeout(() => {
+      saveDraft(input.value);
+    }, 400);
   });
 
   input.addEventListener('keydown', (e) => {
@@ -921,6 +1002,7 @@ async function sendMessage() {
     clearAttachment();
     replyTo = null;
     renderReplyPreview();
+    saveDraft('');  // پاک کردن draft
     playSendSound();
     requestNotifPermission();
   } catch (err) {
@@ -1486,6 +1568,142 @@ function openLightbox(url) {
 $('lightboxClose') && ($('lightboxClose').onclick = () => $('lightbox').classList.remove('show'));
 $('lightbox') && ($('lightbox').onclick = (e) => { if (e.target.id === 'lightbox') $('lightbox').classList.remove('show'); });
 
+
+// ═══════════════════════════════════════════
+// ➡️ Forward
+// ═══════════════════════════════════════════
+function openForwardModal(msg) {
+  forwardedMessage = msg;
+  const modal = $('forwardModal');
+  modal.style.display = 'flex';
+  $('forwardSearch').value = '';
+  renderForwardList('');
+  setTimeout(() => $('forwardSearch').focus(), 100);
+}
+
+function renderForwardList(query) {
+  const list = $('forwardList');
+  const q = (query || '').trim().toLowerCase();
+
+  const items = [];
+  for (const item of chatList) {
+    if (item.kind === 'private' && item.conversation) {
+      items.push({ type: 'private', label: item.otherUser.display_name || item.otherUser.username, item });
+    } else if (item.kind === 'group') {
+      items.push({ type: 'group', label: item.group.name, item });
+    }
+  }
+
+  const filtered = q ? items.filter(i => i.label.toLowerCase().includes(q)) : items;
+
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty-list" style="padding:30px"><span class="emoji">💬</span>چتی پیدا نشد</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map((it, i) => {
+    if (it.type === 'group') {
+      const g = it.item.group;
+      return '<div class="forward-item group" data-i="' + i + '">' +
+        '<div class="avatar">' + (g.avatar_emoji || '👥') + '</div>' +
+        '<div class="name">' + escapeHtml(g.name) + '</div>' +
+        '<div class="type-badge">گروه</div>' +
+      '</div>';
+    } else {
+      const u = it.item.otherUser;
+      const name = u.display_name || u.username;
+      const color = avatarColor(u.id);
+      const av = u.avatar_url ? '<img src="' + u.avatar_url + '">' : getInitials(name);
+      return '<div class="forward-item" data-i="' + i + '">' +
+        '<div class="avatar" style="background:' + (u.avatar_url ? 'transparent' : color) + '">' + av + '</div>' +
+        '<div class="name">' + escapeHtml(name) + '</div>' +
+      '</div>';
+    }
+  }).join('');
+
+  list.querySelectorAll('.forward-item').forEach(el => {
+    el.onclick = () => {
+      const data = filtered[+el.dataset.i];
+      doForward(data);
+    };
+  });
+}
+
+async function doForward(target) {
+  if (!forwardedMessage) return;
+  const msg = forwardedMessage;
+  $('forwardModal').style.display = 'none';
+
+  try {
+    const row = {
+      sender_id: currentUser.id,
+      content: msg.content || '',
+      forwarded_from: msg.id,
+      forwarded_from_name: (() => {
+        const s = allUsers.find(u => u.id === msg.sender_id);
+        return s ? (s.display_name || s.username) : 'ناشناس';
+      })()
+    };
+    if (msg.attachment_url) {
+      row.attachment_url = msg.attachment_url;
+      row.attachment_type = msg.attachment_type;
+      row.attachment_name = msg.attachment_name;
+      row.attachment_size = msg.attachment_size;
+    }
+
+    if (target.type === 'group') {
+      row.group_id = target.item.group.id;
+    } else {
+      row.conversation_id = target.item.conversation.id;
+    }
+
+    const { error } = await supabase.from('messages').insert(row);
+    if (error) throw error;
+
+    showToast('فوروارد شد ✅', 'success');
+    await loadChatList();
+  } catch (e) {
+    showToast('خطا: ' + e.message, 'error');
+  } finally {
+    forwardedMessage = null;
+  }
+}
+
+
+// ═══════════════════════════════════════════
+// 🔕 Mute
+// ═══════════════════════════════════════════
+async function toggleMute() {
+  try {
+    if (currentChatType === 'group') {
+      if (!currentGroup) return;
+      const newVal = !currentGroup.muted;
+      const { error } = await supabase.from('group_members')
+        .update({ muted: newVal })
+        .eq('group_id', currentGroup.id)
+        .eq('user_id', currentUser.id);
+      if (error) throw error;
+      currentGroup.muted = newVal;
+      const item = chatList.find(i => i.kind === 'group' && i.group?.id === currentGroup.id);
+      if (item) item.group.muted = newVal;
+    } else {
+      if (!currentConversation) return;
+      const newVal = !currentConversation.muted;
+      const { error } = await supabase.from('conversations')
+        .update({ muted: newVal })
+        .eq('id', currentConversation.id);
+      if (error) throw error;
+      currentConversation.muted = newVal;
+      const item = chatList.find(i => i.kind === 'private' && i.conversation?.id === currentConversation.id);
+      if (item) item.conversation.muted = newVal;
+    }
+    showToast(currentChatType === 'group' ? 'انجام شد' : 'انجام شد', 'success');
+    renderChatList();
+  } catch (e) {
+    showToast('خطا: ' + e.message, 'error');
+  }
+}
+
 // ═══════════════════ MISC ═══════════════════
 async function markAsRead() {
   const isGroup = currentChatType === 'group';
@@ -1555,6 +1773,21 @@ function notifyNewMessage(msg) {
 // ═══════════════════════════════════════════
 // 👥 گروه چت
 // ═══════════════════════════════════════════
+
+function setupForward() {
+  $('forwardClose').onclick = () => {
+    $('forwardModal').style.display = 'none';
+    forwardedMessage = null;
+  };
+  $('forwardModal').onclick = (e) => {
+    if (e.target.id === 'forwardModal') {
+      $('forwardModal').style.display = 'none';
+      forwardedMessage = null;
+    }
+  };
+  $('forwardSearch').addEventListener('input', (e) => renderForwardList(e.target.value));
+}
+
 function setupGroups() {
   $('newGroupBtn').onclick = () => openCreateGroupModal();
   $('createGroupClose').onclick = () => $('createGroupModal').style.display = 'none';
@@ -1672,6 +1905,12 @@ async function selectGroup(groupId) {
   await loadMessages();
   subscribeMessages();
   subscribeReactions();
+  // بارگذاری draft
+  $('messageInput').value = loadDraft();
+  $('messageInput').style.height = 'auto';
+  $('messageInput').style.height = Math.min($('messageInput').scrollHeight, 120) + 'px';
+  updateSendButton();
+
   setTimeout(() => $('messageInput').focus(), 200);
 }
 
