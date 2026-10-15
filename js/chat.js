@@ -865,10 +865,22 @@ function subscribeAllMessages() {
 
 function subscribeReactions() {
   if (reactionsChannel) supabase.removeChannel(reactionsChannel);
-  reactionsChannel = supabase.channel('rxns-' + currentConversation.id)
+
+  const isGroup = currentChatType === 'group';
+  const ctxField = isGroup ? 'group_id' : 'conversation_id';
+  const ctxValue = isGroup ? currentGroup?.id : currentConversation?.id;
+
+  if (!ctxValue) return;
+
+  reactionsChannel = supabase.channel('rxns-' + ctxField + '-' + ctxValue)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' }, async (payload) => {
       const r = payload.new || payload.old;
       if (!r || !r.message_id) return;
+
+      // فقط اگر پیام در چت فعلی است
+      const isOurMessage = allMessages.some(m => m.id === r.message_id);
+      if (!isOurMessage) return;
+
       const { data } = await supabase.from('reactions').select('*').eq('message_id', r.message_id);
       reactionsMap[r.message_id] = data || [];
       const el = document.querySelector('[data-id="' + r.message_id + '"]');
