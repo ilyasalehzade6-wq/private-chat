@@ -1849,6 +1849,7 @@ async function createGroup() {
   btn.textContent = 'در حال ساخت...';
 
   try {
+    // مرحله ۱: ساخت گروه
     const { data: group, error: gErr } = await supabase
       .from('groups')
       .insert({ name, avatar_emoji: emoji, created_by: currentUser.id })
@@ -1856,12 +1857,24 @@ async function createGroup() {
       .single();
     if (gErr) throw gErr;
 
-    const members = [
-      { group_id: group.id, user_id: currentUser.id, role: 'admin' },
-      ...selected.map(uid => ({ group_id: group.id, user_id: uid, role: 'member' }))
-    ];
-    const { error: mErr } = await supabase.from('group_members').insert(members);
-    if (mErr) throw mErr;
+    // مرحله ۲: اضافه کردن سازنده به‌عنوان ادمین (اول)
+    const { error: adminErr } = await supabase.from('group_members').insert({
+      group_id: group.id, user_id: currentUser.id, role: 'admin'
+    });
+    if (adminErr) {
+      // پاک‌سازی در صورت خطا
+      await supabase.from('groups').delete().eq('id', group.id);
+      throw adminErr;
+    }
+
+    // مرحله ۳: اضافه کردن بقیه اعضا
+    if (selected.length) {
+      const members = selected.map(uid => ({
+        group_id: group.id, user_id: uid, role: 'member'
+      }));
+      const { error: mErr } = await supabase.from('group_members').insert(members);
+      if (mErr) console.warn('برخی اعضا اضافه نشدند:', mErr);
+    }
 
     await loadGroups();
     await loadChatList();
