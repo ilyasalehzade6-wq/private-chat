@@ -1765,7 +1765,7 @@ function broadcastTyping() {
       }
     }).subscribe();
   }
-  typingChannel.send({ type: 'broadcast', event: 'typing', payload: { user_id: currentUser.id } });
+  if (typingChannel.httpSend) { typingChannel.httpSend('typing', { user_id: currentUser.id }).catch(() => {}); } else { typingChannel.send({ type: 'broadcast', event: 'typing', payload: { user_id: currentUser.id } }); }
 }
 
 
