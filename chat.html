@@ -212,14 +212,39 @@
 
 <!-- ═══════════ EMOJI PICKER ═══════════ -->
 <div class="emoji-picker" id="emojiPicker" style="display:none">
-  <div class="emoji-tabs" id="emojiTabs"></div>
-  <div class="emoji-grid" id="emojiGrid"></div>
+  <div class="emoji-main-tabs" id="emojiMainTabs">
+    <button class="active" data-main="emoji">😊 ایموجی</button>
+    <button data-main="sticker">🎭 استیکر</button>
+  </div>
+  <div class="emoji-content" id="emojiContent">
+    <div class="emoji-tabs" id="emojiTabs"></div>
+    <div class="emoji-grid" id="emojiGrid"></div>
+  </div>
+  <div class="sticker-content" id="stickerContent" style="display:none">
+    <div class="sticker-packs" id="stickerPacks"></div>
+    <div class="sticker-grid" id="stickerGrid"></div>
+  </div>
 </div>
 
 <!-- ═══════════ CONTEXT MENU ═══════════ -->
 <div class="context-menu" id="contextMenu" style="display:none"></div>
 
 <!-- ═══════════ PROFILE MODAL ═══════════ -->
+<div class="modal-bg" id="themeModal" style="display:none">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>🎨 رنگ تم</h3>
+      <button id="themeClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="theme-grid" id="themeGrid"></div>
+      <div style="margin-top:16px;padding:12px;border-radius:12px;background:var(--bg);font-size:12.5px;color:var(--text-secondary);line-height:1.7">
+        رنگ انتخابی روی دکمه‌ها، حباب پیام‌های خودت و بخش‌های فعال اعمال می‌شود.
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="wallpaperModal" style="display:none">
   <div class="modal">
     <div class="modal-head">

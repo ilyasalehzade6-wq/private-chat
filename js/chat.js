@@ -107,6 +107,28 @@ let globalSearchFilter = 'all';
 let globalSearchResults = [];
 let savedMessages = [];
 let currentWallpaper = null;
+const STICKER_PACKS = {
+  'احساسات': ['😀','😂','🥰','😍','😎','🤔','😴','🥳','😭','😡','🤯','😱'],
+  'حیوانات': ['🐶','🐱','🐼','🐨','🦊','🐸','🐵','🦁','🐯','🐮','🐷','🐰'],
+  'قلب': ['❤️','🧡','💛','💚','💙','💜','🖤','💖','💘','💝','💕','💞'],
+  'پارتی': ['🎉','🎊','🎈','🎁','🎂','🍰','🍾','🥂','🎆','✨','⭐','🌟'],
+  'غذا': ['🍔','🍕','🌭','🌮','🍣','🍜','🍝','🍩','🍪','🍫','🍦','🧁'],
+  'ورزش': ['⚽','🏀','🎾','🏈','⚾','🏐','🏓','🥊','🏋️','🚴','🏊','⛷️']
+};
+const THEME_COLORS = {
+  purple: { name: 'بنفش', color: '#7B4FE0', label: 'بنفش' },
+  blue:   { name: 'آبی',   color: '#2196F3', label: 'آبی' },
+  green:  { name: 'سبز',   color: '#00BFA5', label: 'سبز' },
+  cyan:   { name: 'فیروزه', color: '#00BCD4', label: 'فیروزه‌ای' },
+  orange: { name: 'نارنجی', color: '#FF6D00', label: 'نارنجی' },
+  pink:   { name: 'صورتی', color: '#E91E63', label: 'صورتی' },
+  red:    { name: 'قرمز',  color: '#F44336', label: 'قرمز' },
+  indigo: { name: 'نیلی',  color: '#3F51B5', label: 'نیلی' },
+  teal:   { name: 'سبزآبی', color: '#009688', label: 'سبزآبی' },
+  amber:  { name: 'کهربا', color: '#FFC107', label: 'کهربا' }
+};
+let currentStickerPack = 'احساسات';
+let currentAccent = 'purple';
 const LINK_REGEX = /(https?:\/\/[^\s<>]+)/gi;    // پیام در حال فوروارد
 
 // Voice recording
@@ -161,6 +183,10 @@ async function init() {
 
   setupUI();
   setupTheme();
+
+  // بارگذاری رنگ تم
+  const savedAccent = localStorage.getItem('theme_accent');
+  if (savedAccent) applyAccent(savedAccent, false);
   setupTabs();
   setupComposer();
   setupEmoji();
@@ -173,6 +199,8 @@ async function init() {
   setupGlobalSearch();
   setupSaved();
   setupWallpaper();
+  setupStickers();
+  setupThemeAccent();
   loadSavedMessages();
   renderChatList();
   subscribeGroups();
@@ -258,7 +286,8 @@ function setupUI() {
       const r = _menuBtn.getBoundingClientRect();
       showMenu({ clientX: r.left + r.width/2, clientY: r.bottom + 4 }, [
         { icon: '👤', label: 'پروفایل من', action: openProfileModal },
-        { icon: '🌙', label: 'تغییر تم', action: toggleTheme },
+        { icon: '🌙', label: 'حالت تاریک/روشن', action: toggleTheme },
+      { icon: '🎨', label: 'رنگ تم', action: () => { $('themeModal').style.display = 'flex'; } },
         { icon: '🔍', label: 'جستجوی همه‌جانبه', action: openGlobalSearch },
         { icon: '🚪', label: 'خروج', action: doLogout, danger: true }
       ]);
@@ -797,6 +826,16 @@ function renderMessage(msg, prevMsg) {
   }
 
   // Attachment
+  // Sticker
+  if (msg.sticker_id) {
+    div.classList.add('sticker');
+    div.innerHTML = '<div class="bubble sticker-bubble">' + msg.sticker_id +
+      '<span class="meta">' + formatTime(msg.created_at) + '</span>' +
+    '</div>';
+    area.appendChild(div);
+    return;
+  }
+
   let attachHtml = '';
   if (msg.attachment_url) {
     if (msg.attachment_type === 'image') {
@@ -2457,6 +2496,148 @@ function linkifyText(text) {
   });
 }
 
+
+// ═══════════════════════════════════════════
+// 🎭 Stickers
+// ═══════════════════════════════════════════
+function setupStickers() {
+  // تب اصلی emoji / sticker
+  document.querySelectorAll('#emojiMainTabs button').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('#emojiMainTabs button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const main = btn.dataset.main;
+      $('emojiContent').style.display = main === 'emoji' ? 'flex' : 'none';
+      $('stickerContent').style.display = main === 'sticker' ? 'flex' : 'none';
+    };
+  });
+
+  // پک‌ها
+  const packs = $('stickerPacks');
+  if (packs) {
+    packs.innerHTML = Object.keys(STICKER_PACKS).map((name, i) =>
+      '<button data-pack="' + name + '"' + (i === 0 ? ' class="active"' : '') + '>' + name + '</button>'
+    ).join('');
+    packs.querySelectorAll('button').forEach(b => {
+      b.onclick = () => {
+        packs.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        currentStickerPack = b.dataset.pack;
+        renderStickers();
+      };
+    });
+  }
+
+  renderStickers();
+}
+
+function renderStickers() {
+  const grid = $('stickerGrid');
+  if (!grid) return;
+  const stickers = STICKER_PACKS[currentStickerPack] || [];
+  grid.innerHTML = stickers.map(s =>
+    '<button class="sticker-item" data-s="' + s + '">' + s + '</button>'
+  ).join('');
+  grid.querySelectorAll('.sticker-item').forEach(b => {
+    b.onclick = () => sendSticker(b.dataset.s);
+  });
+}
+
+async function sendSticker(sticker) {
+  if (!currentChatType) return;
+  if (currentChatType === 'private' && !currentConversation) return;
+  if (currentChatType === 'group' && !currentGroup) return;
+
+  try {
+    const row = {
+      sender_id: currentUser.id,
+      content: '',
+      sticker_id: sticker,
+      attachment_type: 'sticker'
+    };
+    if (currentChatType === 'group') row.group_id = currentGroup.id;
+    else row.conversation_id = currentConversation.id;
+
+    if (replyTo) row.reply_to_id = replyTo.id;
+
+    const { error } = await supabase.from('messages').insert(row);
+    if (error) throw error;
+
+    // بستن picker
+    $('emojiPicker').style.display = 'none';
+    replyTo = null;
+    renderReplyPreview();
+    playSendSound();
+  } catch (e) {
+    showToast('خطا: ' + e.message, 'error');
+  }
+}
+
+// ═══════════════════════════════════════════
+// 🎨 Theme Accent
+// ═══════════════════════════════════════════
+function setupThemeAccent() {
+  const closeBtn = $('themeClose');
+  if (closeBtn) closeBtn.onclick = () => $('themeModal').style.display = 'none';
+
+  const modal = $('themeModal');
+  if (modal) modal.onclick = (e) => {
+    if (e.target.id === 'themeModal') modal.style.display = 'none';
+  };
+
+  // پر کردن گرید
+  const grid = $('themeGrid');
+  if (grid) {
+    grid.innerHTML = Object.entries(THEME_COLORS).map(([key, t]) =>
+      '<div class="theme-color ' + (key === currentAccent ? 'active' : '') +
+      '" data-key="' + key + '" style="background:' + t.color + '">' +
+      t.name.substring(0, 3) + '</div>'
+    ).join('');
+    grid.querySelectorAll('.theme-color').forEach(el => {
+      el.onclick = () => applyAccent(el.dataset.key);
+    });
+  }
+
+  // دکمه در منوی سایدبار
+  // (به جای تغییر تم تاریک، منوی جدید در menuBtn)
+  // در setupUI menuBtn رو آپدیت می‌کنیم
+
+  // بارگذاری از پروفایل
+  if (currentProfile?.theme_accent) {
+    applyAccent(currentProfile.theme_accent, false);
+  }
+}
+
+function applyAccent(key, save = true) {
+  if (!THEME_COLORS[key]) return;
+  currentAccent = key;
+
+  // حذف کلاس‌های قبلی
+  document.body.classList.forEach(c => {
+    if (c.startsWith('accent-')) document.body.classList.remove(c);
+  });
+
+  document.body.classList.add('accent-' + key);
+
+  // آپدیت UI
+  const grid = $('themeGrid');
+  if (grid) {
+    grid.querySelectorAll('.theme-color').forEach(el => {
+      el.classList.toggle('active', el.dataset.key === key);
+    });
+  }
+
+  // ذخیره در localStorage
+  localStorage.setItem('theme_accent', key);
+
+  // ذخیره در پروفایل
+  if (save && currentUser) {
+    supabase.from('profiles').update({ theme_accent: key }).eq('id', currentUser.id)
+      .then(() => showToast('رنگ تم ذخیره شد 🎨', 'success'))
+      .catch(() => {});
+  }
+}
+
 // ═══════════════════ MISC ═══════════════════
 async function markAsRead() {
   const isGroup = currentChatType === 'group';
@@ -2733,7 +2914,8 @@ function bindMenusHard() {
         { clientX: r.left + r.width / 2, clientY: r.bottom + 4 },
         [
           { icon: '👤', label: 'پروفایل من', action: openProfileModal },
-          { icon: '🌙', label: 'تغییر تم', action: toggleTheme },
+          { icon: '🌙', label: 'حالت تاریک/روشن', action: toggleTheme },
+      { icon: '🎨', label: 'رنگ تم', action: () => { $('themeModal').style.display = 'flex'; } },
           { icon: '🔍', label: 'جستجوی همه‌جانبه', action: openGlobalSearch },
           { icon: '🚪', label: 'خروج', action: doLogout, danger: true }
         ]

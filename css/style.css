@@ -2214,3 +2214,162 @@ body.dark .auth-page {
 }
 .message.theirs .bubble-text a { color: var(--primary); }
 
+
+/* ═══════════════════════════════════════════
+   🎭 Stickers + 🎨 Theme
+   ═══════════════════════════════════════════ */
+
+/* تب اصلی picker */
+.emoji-main-tabs {
+  display: flex;
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 3px;
+  margin: 8px;
+  gap: 3px;
+}
+.emoji-main-tabs button {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 9px;
+  transition: all .15s;
+}
+.emoji-main-tabs button.active {
+  background: var(--card);
+  color: var(--primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+
+/* Sticker packs */
+.sticker-packs {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+.sticker-packs button {
+  padding: 6px 12px;
+  border: none;
+  background: var(--bg);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: all .15s;
+}
+.sticker-packs button.active {
+  background: var(--gradient);
+  color: #fff;
+}
+
+/* Sticker grid */
+.sticker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 10px;
+  overflow-y: auto;
+  max-height: 280px;
+}
+
+.sticker-item {
+  aspect-ratio: 1;
+  border: none;
+  background: transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s;
+  position: relative;
+  overflow: hidden;
+}
+.sticker-item:hover {
+  background: var(--bg);
+  transform: scale(1.1);
+}
+.sticker-item:active { transform: scale(.95); }
+
+/* Sticker در پیام */
+.message .sticker-bubble {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  font-size: 88px;
+  line-height: 1;
+  min-width: auto !important;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,.15));
+  animation: stickerPop .35s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes stickerPop {
+  0% { transform: scale(.5) rotate(-8deg); opacity: 0; }
+  70% { transform: scale(1.08) rotate(2deg); }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+.message.sticker .bubble .meta {
+  background: rgba(0,0,0,.55);
+  color: #fff !important;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  float: none !important;
+  display: inline-block !important;
+  margin-top: 4px !important;
+}
+
+/* Theme grid */
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+.theme-color {
+  aspect-ratio: 1;
+  border-radius: 16px;
+  cursor: pointer;
+  border: 3px solid transparent;
+  transition: all .15s;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: #fff;
+  font-weight: 800;
+  text-shadow: 0 1px 4px rgba(0,0,0,.4);
+}
+.theme-color:hover { transform: scale(1.08); }
+.theme-color.active {
+  border-color: var(--text);
+  box-shadow: 0 0 0 3px rgba(0,0,0,.1);
+}
+.theme-color.active::after { content: "✓"; }
+
+/* ═══ Theme Accent — متغیرهای رنگی ═══ */
+body.accent-purple { --primary: #7B4FE0; --primary-dark: #6438C7; --primary-light: #9E7AFF; }
+body.accent-blue   { --primary: #2196F3; --primary-dark: #1976D2; --primary-light: #64B5F6; }
+body.accent-green  { --primary: #00BFA5; --primary-dark: #00897B; --primary-light: #4DB6AC; }
+body.accent-orange { --primary: #FF6D00; --primary-dark: #E65100; --primary-light: #FFA726; }
+body.accent-pink   { --primary: #E91E63; --primary-dark: #C2185B; --primary-light: #F06292; }
+body.accent-red    { --primary: #F44336; --primary-dark: #D32F2F; --primary-light: #EF5350; }
+body.accent-cyan   { --primary: #00BCD4; --primary-dark: #0097A7; --primary-light: #4DD0E1; }
+body.accent-indigo { --primary: #3F51B5; --primary-dark: #303F9F; --primary-light: #7986CB; }
+body.accent-teal   { --primary: #009688; --primary-dark: #00796B; --primary-light: #4DB6AC; }
+body.accent-amber  { --primary: #FFC107; --primary-dark: #FFA000; --primary-light: #FFD54F; }
+
+/* گرادیان پویا بر اساس --primary */
+body { --gradient: linear-gradient(135deg, var(--primary), var(--primary-light)); }
+body { --gradient-msg: linear-gradient(135deg, var(--primary), var(--primary-light)); }
