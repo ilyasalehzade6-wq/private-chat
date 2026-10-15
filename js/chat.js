@@ -1446,9 +1446,21 @@ function showMenu(e, items) {
 
 function setupContextMenuClose() {
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('#contextMenu')) {
-      $('contextMenu').style.display = 'none';
-    }
+    // اگر روی منو کلیک شد، بستن را رد کن
+    if (e.target.closest('#contextMenu')) return;
+
+    // اگر روی دکمه‌هایی که منو را باز می‌کنند کلیک شد، بستن را رد کن
+    if (e.target.closest('#chatMenuBtn')) return;
+    if (e.target.closest('#menuBtn')) return;
+    if (e.target.closest('#savedBtn')) return;
+    if (e.target.closest('#newGroupBtn')) return;
+    if (e.target.closest('#newChatBtn')) return;
+    if (e.target.closest('#attachBtn')) return;
+    if (e.target.closest('#emojiBtn')) return;
+
+    // در غیر این صورت ببند
+    const menu = $('contextMenu');
+    if (menu) menu.style.display = 'none';
   });
 }
 
@@ -2680,5 +2692,57 @@ async function subscribeGroups() {
     })
     .subscribe();
 }
+
+
+
+// ═══════════════════════════════════════════
+// 🔧 بایند محکم منوها (با stopPropagation)
+// ═══════════════════════════════════════════
+function bindMenusHard() {
+  const cmb = document.getElementById('chatMenuBtn');
+  if (cmb && !cmb._hardBound) {
+    cmb._hardBound = true;
+    cmb.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const r = cmb.getBoundingClientRect();
+      const isMuted = currentChatType === 'group'
+        ? currentGroup?.muted
+        : currentConversation?.muted;
+      showMenu(
+        { clientX: r.left + r.width / 2, clientY: r.bottom + 4 },
+        [
+          { icon: '🔍', label: 'جستجو در چت', action: () => toggleSearchBar(true) },
+          { icon: '📌', label: pinnedMsg ? 'رفتن به پین' : 'پیام پین‌شده', action: () => pinnedMsg && scrollToMessage(pinnedMsg.id) },
+          { icon: isMuted ? '🔔' : '🔕', label: isMuted ? 'صدادار' : 'بی‌صدا', action: toggleMute },
+          { icon: '🎨', label: 'والپیپر', action: openWallpaperModal },
+          { icon: '🗑', label: 'حذف گفتگو', action: () => showToast('به‌زودی', 'info'), danger: true }
+        ]
+      );
+    }, true);  // capture phase
+  }
+
+  const mb = document.getElementById('menuBtn');
+  if (mb && !mb._hardBound) {
+    mb._hardBound = true;
+    mb.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const r = mb.getBoundingClientRect();
+      showMenu(
+        { clientX: r.left + r.width / 2, clientY: r.bottom + 4 },
+        [
+          { icon: '👤', label: 'پروفایل من', action: openProfileModal },
+          { icon: '🌙', label: 'تغییر تم', action: toggleTheme },
+          { icon: '🔍', label: 'جستجوی همه‌جانبه', action: openGlobalSearch },
+          { icon: '🚪', label: 'خروج', action: doLogout, danger: true }
+        ]
+      );
+    }, true);
+  }
+}
+
+setTimeout(bindMenusHard, 400);
+setInterval(bindMenusHard, 2000);
 
 init();
