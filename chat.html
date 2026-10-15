@@ -277,95 +277,114 @@
 </div>
 
 <div class="modal-bg" id="settingsModal" style="display:none">
-  <div class="modal">
-    <div class="modal-head">
-      <h3>⚙️ تنظیمات</h3>
-      <button id="settingsClose">✕</button>
+  <div class="modal modal-settings">
+    <div class="settings-hero">
+      <button class="settings-hero-close" id="settingsClose">✕</button>
+      <div class="settings-hero-glow"></div>
+      <div class="settings-hero-avatar" id="settingsAvatar">👤</div>
+      <div class="settings-hero-name" id="settingsName">-</div>
+      <div class="settings-hero-id" id="settingsPublicId">@-</div>
+      <button class="settings-hero-edit" id="settingsEditProfile">
+        ✏️ ویرایش پروفایل
+      </button>
     </div>
-    <div class="modal-body">
-      <div class="settings-list">
-        <div class="setting-item">
-          <div class="setting-icon" style="background:linear-gradient(135deg,#FF6B9D,#C44569)">👤</div>
-          <div class="setting-body">
-            <div class="setting-title">پروفایل من</div>
-            <div class="setting-desc">نام، عکس، بیو</div>
+
+    <div class="settings-content">
+
+      <div class="settings-group">
+        <div class="settings-group-title">عمومی</div>
+        <div class="settings-row" id="openThemeFromSettings">
+          <div class="settings-row-icon" style="background:linear-gradient(135deg,#7B4FE0,#9E7AFF)">🎨</div>
+          <div class="settings-row-body">
+            <div class="settings-row-title">رنگ تم</div>
+            <div class="settings-row-desc" id="settingsAccentName">بنفش</div>
           </div>
-          <div class="setting-arrow">←</div>
-        </div>
-        <div class="setting-item" id="openThemeFromSettings">
-          <div class="setting-icon" style="background:linear-gradient(135deg,#7B4FE0,#9E7AFF)">🎨</div>
-          <div class="setting-body">
-            <div class="setting-title">رنگ تم</div>
-            <div class="setting-desc">تغییر رنگ برنامه</div>
-          </div>
-          <div class="setting-arrow">←</div>
-        </div>
-        <div class="setting-item" id="toggleDarkTheme">
-          <div class="setting-icon" style="background:linear-gradient(135deg,#3F51B5,#303F9F)">🌙</div>
-          <div class="setting-body">
-            <div class="setting-title">حالت تاریک</div>
-            <div class="setting-desc">تغییر روشنایی برنامه</div>
-          </div>
-          <div class="setting-switch" id="darkThemeSwitch"></div>
-        </div>
-        <div class="setting-divider"></div>
-        <div class="setting-item">
-          <div class="setting-icon" style="background:linear-gradient(135deg,#00BCD4,#0097A7)">🔔</div>
-          <div class="setting-body">
-            <div class="setting-title">اعلان‌ها</div>
-            <div class="setting-desc">دریافت اعلان پیام‌های جدید</div>
-          </div>
-          <div class="setting-switch" id="notifSwitch"></div>
-        </div>
-        <div class="setting-item">
-          <div class="setting-icon" style="background:linear-gradient(135deg,#FFC107,#FFA000)">🔊</div>
-          <div class="setting-body">
-            <div class="setting-title">صدای اعلان</div>
-            <div class="setting-desc">پخش صدا هنگام دریافت پیام</div>
-          </div>
-          <div class="setting-switch" id="soundSwitch"></div>
-        </div>
-        <div class="setting-item">
-          <div class="setting-icon" style="background:linear-gradient(135deg,#F44336,#D32F2F)">✓✓</div>
-          <div class="setting-body">
-            <div class="setting-title">تیک خوانده‌شدن</div>
-            <div class="setting-desc">نمایش تیک آبی برای پیام‌های خوانده‌شده</div>
-          </div>
-          <div class="setting-switch" id="readReceiptsSwitch"></div>
-        </div>
-        <div class="setting-item">
-          <div class="setting-icon" style="background:linear-gradient(135deg,#00BFA5,#00897B)">👁️</div>
-          <div class="setting-body">
-            <div class="setting-title">آخرین بازدید</div>
-            <div class="setting-desc">نمایش آخرین بازدید به دیگران</div>
-          </div>
-          <div class="setting-switch" id="lastSeenSwitch"></div>
-        </div>
-        <div class="setting-divider"></div>
-        <div class="setting-item" id="clearCacheBtn">
-          <div class="setting-icon" style="background:linear-gradient(135deg,#9E9E9E,#757575)">🗑️</div>
-          <div class="setting-body">
-            <div class="setting-title">پاک کردن cache</div>
-            <div class="setting-desc">حذف داده‌های موقت برنامه</div>
-          </div>
-          <div class="setting-arrow">←</div>
-        </div>
-        <div class="setting-item">
-          <div class="setting-icon" style="background:linear-gradient(135deg,#2196F3,#1976D2)">ℹ️</div>
-          <div class="setting-body">
-            <div class="setting-title">درباره</div>
-            <div class="setting-desc">نسخه 1.0.0</div>
+          <div class="settings-row-value">
+            <span class="theme-preview" id="settingsThemePreview"></span>
+            <span class="settings-row-arrow">‹</span>
           </div>
         </div>
-        <div class="setting-divider"></div>
-        <div class="setting-item danger" id="logoutFromSettings">
-          <div class="setting-icon" style="background:linear-gradient(135deg,#F44336,#D32F2F)">🚪</div>
-          <div class="setting-body">
-            <div class="setting-title">خروج از حساب</div>
+        <div class="settings-row" id="toggleDarkTheme">
+          <div class="settings-row-icon" style="background:linear-gradient(135deg,#3F51B5,#303F9F)">🌙</div>
+          <div class="settings-row-body">
+            <div class="settings-row-title">حالت تاریک</div>
+            <div class="settings-row-desc">ظاهر تیره برای شب</div>
           </div>
+          <div class="switch" id="darkThemeSwitch"><span></span></div>
         </div>
       </div>
+
+      <div class="settings-group">
+        <div class="settings-group-title">اعلان‌ها</div>
+        <div class="settings-row">
+          <div class="settings-row-icon" style="background:linear-gradient(135deg,#FF6B9D,#C44569)">🔔</div>
+          <div class="settings-row-body">
+            <div class="settings-row-title">اعلان‌های پیام</div>
+            <div class="settings-row-desc">نمایش اعلان برای پیام جدید</div>
+          </div>
+          <div class="switch" id="notifSwitch"><span></span></div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-icon" style="background:linear-gradient(135deg,#FFC107,#FFA000)">🔊</div>
+          <div class="settings-row-body">
+            <div class="settings-row-title">صدای اعلان</div>
+            <div class="settings-row-desc">پخش صدا هنگام دریافت</div>
+          </div>
+          <div class="switch" id="soundSwitch"><span></span></div>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-group-title">حریم خصوصی</div>
+        <div class="settings-row">
+          <div class="settings-row-icon" style="background:linear-gradient(135deg,#00BCD4,#0097A7)">✓✓</div>
+          <div class="settings-row-body">
+            <div class="settings-row-title">تیک خوانده‌شدن</div>
+            <div class="settings-row-desc">نمایش تیک آبی برای دیگران</div>
+          </div>
+          <div class="switch" id="readReceiptsSwitch"><span></span></div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-icon" style="background:linear-gradient(135deg,#00BFA5,#00897B)">👁️</div>
+          <div class="settings-row-body">
+            <div class="settings-row-title">آخرین بازدید</div>
+            <div class="settings-row-desc">نمایش آخرین بازدید به دیگران</div>
+          </div>
+          <div class="switch" id="lastSeenSwitch"><span></span></div>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-group-title">داده‌ها</div>
+        <div class="settings-row" id="clearCacheBtn">
+          <div class="settings-row-icon" style="background:linear-gradient(135deg,#9E9E9E,#616161)">🗑️</div>
+          <div class="settings-row-body">
+            <div class="settings-row-title">پاک کردن cache</div>
+            <div class="settings-row-desc">حذف داده‌های موقت</div>
+          </div>
+          <div class="settings-row-arrow">‹</div>
+        </div>
+        <div class="settings-row" id="aboutBtn">
+          <div class="settings-row-icon" style="background:linear-gradient(135deg,#2196F3,#1976D2)">ℹ️</div>
+          <div class="settings-row-body">
+            <div class="settings-row-title">درباره</div>
+            <div class="settings-row-desc">نسخه ۱.۰.۰</div>
+          </div>
+          <div class="settings-row-arrow">‹</div>
+        </div>
+      </div>
+
+      <button class="settings-logout" id="logoutFromSettings">
+        <span>🚪</span>
+        خروج از حساب
+      </button>
+
+      <div class="settings-footer">پیام‌رسان خصوصی • ساخته‌شده با ❤️</div>
     </div>
+  </div>
+</div>
+
+
   </div>
 </div>
 

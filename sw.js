@@ -1,5 +1,5 @@
 // sw.js — Service Worker برای PWA
-const CACHE_NAME = 'private-chat-v1792095606';
+const CACHE_NAME = 'private-chat-v1792095910';
 const CORE_FILES = [
   './',
   './index.html',

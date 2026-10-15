@@ -291,7 +291,7 @@ function setupUI() {
         { icon: '👤', label: 'پروفایل من', action: openProfileModal },
         { icon: '🌙', label: 'حالت تاریک/روشن', action: toggleTheme },
       { icon: '🎨', label: 'رنگ تم', action: () => { $('themeModal').style.display = 'flex'; } },
-      { icon: '⚙️', label: 'تنظیمات', action: () => { $('settingsModal').style.display = 'flex'; } },
+      { icon: '⚙️', label: 'تنظیمات', action: openSettings },
         { icon: '🔍', label: 'جستجوی همه‌جانبه', action: openGlobalSearch },
         { icon: '🚪', label: 'خروج', action: doLogout, danger: true }
       ]);
@@ -2685,13 +2685,12 @@ let userSettings = {
 
 function setupSettings() {
   const btn = $('settingsBtn');
-  if (!btn) return;
-
-  btn.onclick = (e) => {
-    e.stopPropagation();
-    $('settingsModal').style.display = 'flex';
-    updateSettingsUI();
-  };
+  if (btn) {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      openSettings();
+    };
+  }
 
   const closeBtn = $('settingsClose');
   if (closeBtn) closeBtn.onclick = () => $('settingsModal').style.display = 'none';
@@ -2701,43 +2700,36 @@ function setupSettings() {
     if (e.target.id === 'settingsModal') modal.style.display = 'none';
   };
 
-  // پروفایل
-  const profileItem = document.querySelector('#settingsModal .setting-item');
-  if (profileItem && !profileItem.id) {
-    profileItem.onclick = () => {
-      $('settingsModal').style.display = 'none';
-      setTimeout(openProfileModal, 150);
-    };
-  }
+  const editBtn = $('settingsEditProfile');
+  if (editBtn) editBtn.onclick = () => {
+    $('settingsModal').style.display = 'none';
+    setTimeout(openProfileModal, 150);
+  };
 
-  // رنگ تم
   const themeItem = $('openThemeFromSettings');
   if (themeItem) themeItem.onclick = () => {
     $('settingsModal').style.display = 'none';
     setTimeout(() => { $('themeModal').style.display = 'flex'; }, 150);
   };
 
-  // حالت تاریک
-  const darkItem = $('toggleDarkTheme');
-  if (darkItem) darkItem.onclick = (e) => {
-    if (e.target.closest('.setting-switch')) return;
-    toggleTheme();
-    updateSettingsUI();
-  };
   const darkSwitch = $('darkThemeSwitch');
   if (darkSwitch) darkSwitch.onclick = (e) => {
     e.stopPropagation();
     toggleTheme();
     updateSettingsUI();
   };
+  const darkItem = $('toggleDarkTheme');
+  if (darkItem) darkItem.onclick = (e) => {
+    if (e.target.closest('.switch')) return;
+    toggleTheme();
+    updateSettingsUI();
+  };
 
-  // سوییچ‌ها
   bindSwitch('notifSwitch', 'notifications');
   bindSwitch('soundSwitch', 'notification_sound');
   bindSwitch('readReceiptsSwitch', 'read_receipts');
   bindSwitch('lastSeenSwitch', 'last_seen_visible');
 
-  // پاک کردن cache
   const clearBtn = $('clearCacheBtn');
   if (clearBtn) clearBtn.onclick = async () => {
     if (!confirm('همه داده‌های موقت پاک شود؟')) return;
@@ -2748,12 +2740,40 @@ function setupSettings() {
     showToast('cache پاک شد', 'success');
   };
 
-  // خروج
+  const aboutBtn = $('aboutBtn');
+  if (aboutBtn) aboutBtn.onclick = () => {
+    showToast('پیام‌رسان خصوصی — نسخه ۱.۰.۰', 'info');
+  };
+
   const logoutBtn = $('logoutFromSettings');
   if (logoutBtn) logoutBtn.onclick = () => {
     $('settingsModal').style.display = 'none';
     doLogout();
   };
+}
+
+function openSettings() {
+  const av = $('settingsAvatar');
+  if (av) {
+    av.innerHTML = currentProfile?.avatar_url
+      ? '<img src="' + currentProfile.avatar_url + '" alt="">'
+      : getInitials(currentProfile?.display_name || currentProfile?.username || '?');
+  }
+  const nm = $('settingsName');
+  if (nm) nm.textContent = currentProfile?.display_name || currentProfile?.username || '-';
+  const id = $('settingsPublicId');
+  if (id) id.textContent = currentProfile?.public_id || '@' + (currentProfile?.username || 'user');
+  const accentName = $('settingsAccentName');
+  if (accentName && THEME_COLORS[currentAccent]) {
+    accentName.textContent = THEME_COLORS[currentAccent].name;
+  }
+  const preview = $('settingsThemePreview');
+  if (preview && THEME_COLORS[currentAccent]) {
+    preview.style.background = THEME_COLORS[currentAccent].color;
+  }
+
+  updateSettingsUI();
+  $('settingsModal').style.display = 'flex';
 }
 
 function bindSwitch(id, key) {
@@ -2768,19 +2788,28 @@ function bindSwitch(id, key) {
 }
 
 function updateSettingsUI() {
-  // دارک
   const darkSwitch = $('darkThemeSwitch');
-  if (darkSwitch) {
-    darkSwitch.classList.toggle('on', document.body.classList.contains('dark'));
-  }
+  if (darkSwitch) darkSwitch.classList.toggle('on', document.body.classList.contains('dark'));
 
-  // سوییچ‌ها
-  ['notifSwitch:notifications', 'soundSwitch:notification_sound',
-   'readReceiptsSwitch:read_receipts', 'lastSeenSwitch:last_seen_visible'].forEach(pair => {
-    const [id, key] = pair.split(':');
-    const el = $(id);
-    if (el) el.classList.toggle('on', !!userSettings[key]);
+  const pairs = [
+    ['notifSwitch', 'notifications'],
+    ['soundSwitch', 'notification_sound'],
+    ['readReceiptsSwitch', 'read_receipts'],
+    ['lastSeenSwitch', 'last_seen_visible']
+  ];
+  pairs.forEach(function(pair) {
+    const el = $(pair[0]);
+    if (el) el.classList.toggle('on', !!userSettings[pair[1]]);
   });
+
+  const accentName = $('settingsAccentName');
+  if (accentName && THEME_COLORS[currentAccent]) {
+    accentName.textContent = THEME_COLORS[currentAccent].name;
+  }
+  const preview = $('settingsThemePreview');
+  if (preview && THEME_COLORS[currentAccent]) {
+    preview.style.background = THEME_COLORS[currentAccent].color;
+  }
 }
 
 async function loadUserSettings() {
@@ -3191,7 +3220,8 @@ function bindMenusHard() {
           { icon: '👤', label: 'پروفایل من', action: openProfileModal },
           { icon: '🌙', label: 'حالت تاریک/روشن', action: toggleTheme },
       { icon: '🎨', label: 'رنگ تم', action: () => { $('themeModal').style.display = 'flex'; } },
-      { icon: '⚙️', label: 'تنظیمات', action: () => { $('settingsModal').style.display = 'flex'; } },
+      { icon: '⚙️', label: 'تنظیمات', action: openSettings },
+          { icon: '⚙️', label: 'تنظیمات', action: openSettings },
           { icon: '🔍', label: 'جستجوی همه‌جانبه', action: openGlobalSearch },
           { icon: '🚪', label: 'خروج', action: doLogout, danger: true }
         ]
