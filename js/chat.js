@@ -47,6 +47,50 @@ function playSendSound() {
   } catch (e) {}
 }
 
+// ═══════════════════════════════════════════
+// 🔔 اعلان مرورگر
+// ═══════════════════════════════════════════
+async function requestNotifPermission() {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') {
+    notificationGranted = true;
+    return true;
+  }
+  if (Notification.permission === 'denied') return false;
+  try {
+    const p = await Notification.requestPermission();
+    notificationGranted = (p === 'granted');
+    return notificationGranted;
+  } catch (e) {
+    return false;
+  }
+}
+
+function notifyNewMessage(msg) {
+  if (!notificationGranted) return;
+  if (document.visibilityState === 'visible' && document.hasFocus()) return;
+
+  const sender = allUsers.find(u => u.id === msg.sender_id);
+  const name = sender?.display_name || sender?.username || 'پیام جدید';
+  let body = msg.content || '';
+  if (!body) {
+    if (msg.attachment_type === 'image') body = '📷 عکس';
+    else if (msg.attachment_type === 'video') body = '🎥 ویدیو';
+    else if (msg.attachment_type === 'voice') body = '🎤 پیام صوتی';
+    else body = '📄 فایل';
+  }
+
+  try {
+    new Notification(name, {
+      body: body.substring(0, 100),
+      tag: 'msg-' + msg.id,
+      silent: false
+    });
+  } catch (e) {}
+}
+
+
+
 
 
 // ═══════════════════ STATE ═══════════════════
