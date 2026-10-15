@@ -11,6 +11,9 @@ let allUsers = [];
 let chatList = [];            // [{otherUser, conversation, lastMessage, lastTime, unread}]
 let currentOtherUser = null;
 let currentConversation = null;
+let currentGroup = null;
+let allGroups = [];
+let currentChatType = 'private';  // 'private' | 'group'
 let currentFilter = 'all';
 let allMessages = [];
 let reactionsMap = {};
@@ -72,6 +75,7 @@ async function init() {
   });
 
   await loadAllUsers();
+  await loadGroups();
   await loadChatList();
   subscribeProfiles();
   subscribeAllMessages();
@@ -85,6 +89,8 @@ async function init() {
   setupContextMenuClose();
   setupProfileModal();
   setupSearch();
+  setupGroups();
+  subscribeGroups();
   setupVoice();
   setupScrollBottom();
 
@@ -192,67 +198,97 @@ async function loadAllUsers() {
   allUsers = data || [];
 }
 
+
+async function loadGroups() {
+  const { data, error } = await supabase
+    .from('group_members')
+    .select('group_id, groups(*)')
+    .eq('user_id', currentUser.id);
+  if (error) { console.warn(error); return; }
+  allGroups = (data || []).map(m => m.groups).filter(Boolean);
+}
+
 async function loadChatList() {
   const list = $('chatList');
   list.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>در حال بارگذاری...</p></div>';
 
-  // واکشی همه مکالمات کاربر
+  // مکالمات خصوصی
   const { data: convs, error } = await supabase
     .from('conversations')
     .select('*')
     .or('user1_id.eq.' + currentUser.id + ',user2_id.eq.' + currentUser.id)
     .order('last_message_at', { ascending: false, nullsFirst: false });
 
-  if (error) { list.innerHTML = '<div class="empty-list"><span class="emoji">⚠️</span>خطا در بارگذاری</div>'; return; }
+  if (error) { list.innerHTML = '<div class="empty-list"><span class="emoji">⚠️</span>خطا</div>'; return; }
 
-  // برای هر مکالمه، آخرین پیام و تعداد نخوانده
   const items = [];
+
+  // ─── خصوصی ───
   for (const conv of (convs || [])) {
     const otherId = conv.user1_id === currentUser.id ? conv.user2_id : conv.user1_id;
     const other = allUsers.find(u => u.id === otherId);
     if (!other) continue;
 
-    // آخرین پیام
     const { data: last } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('conversation_id', conv.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .from('messages').select('*').eq('conversation_id', conv.id)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
 
-    // تعداد نخوانده
     const { count } = await supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
+      .from('messages').select('*', { count: 'exact', head: true })
       .eq('conversation_id', conv.id)
-      .neq('sender_id', currentUser.id)
-      .is('read_at', null);
+      .neq('sender_id', currentUser.id).is('read_at', null);
 
     items.push({
+      kind: 'private',
+      id: conv.id,
       otherUser: other,
       conversation: conv,
       lastMessage: last,
-      unread: count || 0
+      unread: count || 0,
+      updatedAt: last?.created_at || conv.last_message_at || conv.created_at
     });
   }
 
-  // کاربرانی که مکالمه ندارند را هم اضافه کن (برای شروع سریع)
+  // کاربران بدون مکالمه
   for (const u of allUsers) {
-    if (!items.find(i => i.otherUser.id === u.id)) {
+    if (!items.find(i => i.kind === 'private' && i.otherUser.id === u.id)) {
       items.push({
+        kind: 'private',
+        id: 'user-' + u.id,
         otherUser: u,
         conversation: null,
         lastMessage: null,
-        unread: 0
+        unread: 0,
+        updatedAt: null
       });
     }
   }
 
-  // مرتب‌سازی: pin > last_time
+  // ─── گروه‌ها ───
+  for (const g of allGroups) {
+    const { data: last } = await supabase
+      .from('messages').select('*').eq('group_id', g.id)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+
+    const { count } = await supabase
+      .from('messages').select('*', { count: 'exact', head: true })
+      .eq('group_id', g.id)
+      .neq('sender_id', currentUser.id).is('read_at', null);
+
+    items.push({
+      kind: 'group',
+      id: g.id,
+      group: g,
+      lastMessage: last,
+      unread: count || 0,
+      updatedAt: last?.created_at || g.created_at
+    });
+  }
+
+  // مرتب‌سازی
   items.sort((a, b) => {
-    const at = a.lastMessage?.created_at ? new Date(a.lastMessage.created_at) : 0;
-    const bt = b.lastMessage?.created_at ? new Date(b.lastMessage.created_at) : 0;
+    const at = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+    const bt = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
     return bt - at;
   });
 
@@ -261,19 +297,20 @@ async function loadChatList() {
   updateUnreadTabBadge();
 }
 
+
 function renderChatList() {
   const list = $('chatList');
   const q = ($('searchInput').value || '').trim().toLowerCase();
 
   let items = chatList.slice();
 
-  // فیلتر تب
   if (currentFilter === 'unread') items = items.filter(i => i.unread > 0);
-  else if (currentFilter === 'online') items = items.filter(i => i.otherUser.is_online);
+  else if (currentFilter === 'online') items = items.filter(i => i.kind === 'private' && i.otherUser.is_online);
+  else if (currentFilter === 'groups') items = items.filter(i => i.kind === 'group');
 
-  // فیلتر جستجو
   if (q) {
     items = items.filter(i => {
+      if (i.kind === 'group') return (i.group.name || '').toLowerCase().includes(q);
       const n = (i.otherUser.display_name || i.otherUser.username || '').toLowerCase();
       return n.includes(q);
     });
@@ -285,64 +322,92 @@ function renderChatList() {
   }
 
   list.innerHTML = items.map(item => {
-    const u = item.otherUser;
-    const name = u.display_name || u.username;
-    const initial = getInitials(name);
-    const color = avatarColor(u.id);
-    const avHtml = u.avatar_url
-      ? '<div class="avatar-img"><img src="' + u.avatar_url + '" alt=""></div>'
-      : initial;
-    const avStyle = u.avatar_url ? 'transparent' : color;
-    const onlineDot = u.is_online ? '<span class="online-dot"></span>' : '';
-    const unreadBadge = item.unread > 0 ? '<span class="unread-badge">' + (item.unread > 99 ? '99+' : item.unread) + '</span>' : '';
-    const active = currentOtherUser?.id === u.id ? 'active' : '';
+    const isGroup = item.kind === 'group';
 
-    let preview = 'شروع گفتگو کن...';
+    let name, initial, color, avHtml, avStyle, onlineDot, extraClass, active;
+
+    if (isGroup) {
+      name = item.group.name;
+      initial = item.group.avatar_emoji || '👥';
+      color = 'linear-gradient(135deg, #FFB84D, #FF6B9D)';
+      avHtml = item.group.avatar_url ? '<img src="' + item.group.avatar_url + '">' : initial;
+      avStyle = item.group.avatar_url ? 'transparent' : color;
+      onlineDot = '';
+      extraClass = 'group-item';
+      active = currentGroup?.id === item.group.id ? 'active' : '';
+    } else {
+      name = item.otherUser.display_name || item.otherUser.username;
+      initial = getInitials(name);
+      color = avatarColor(item.otherUser.id);
+      avHtml = item.otherUser.avatar_url ? '<div class="avatar-img"><img src="' + item.otherUser.avatar_url + '"></div>' : initial;
+      avStyle = item.otherUser.avatar_url ? 'transparent' : color;
+      onlineDot = item.otherUser.is_online ? '<span class="online-dot"></span>' : '';
+      extraClass = '';
+      active = currentOtherUser?.id === item.otherUser.id && currentChatType === 'private' ? 'active' : '';
+    }
+
+    const unreadBadge = item.unread > 0 ? '<span class="unread-badge">' + (item.unread > 99 ? '99+' : item.unread) + '</span>' : '';
+
+    let preview = 'شروع گفتگو...';
     let time = '';
     let tick = '';
 
     if (item.lastMessage) {
       const m = item.lastMessage;
-      if (m.content) preview = m.content;
-      else if (m.attachment_type === 'image') preview = '📷 عکس';
-      else if (m.attachment_type === 'video') preview = '🎥 ویدیو';
-      else if (m.attachment_type === 'voice') preview = '🎤 پیام صوتی';
-      else preview = '📄 فایل';
+      let body = m.content;
+      if (!body) {
+        if (m.attachment_type === 'image') body = '📷 عکس';
+        else if (m.attachment_type === 'video') body = '🎥 ویدیو';
+        else if (m.attachment_type === 'voice') body = '🎤 پیام صوتی';
+        else body = '📄 فایل';
+      }
 
-      preview = preview.substring(0, 60);
+      if (isGroup && m.sender_id !== currentUser.id) {
+        const sender = allUsers.find(u => u.id === m.sender_id);
+        const sName = sender?.display_name || sender?.username || '';
+        if (sName && m.content) {
+          preview = sName + ': ' + m.content.substring(0, 40);
+        } else {
+          preview = body.substring(0, 55);
+        }
+      } else {
+        preview = body.substring(0, 55);
+      }
+
       time = formatTime(m.created_at);
 
       if (m.sender_id === currentUser.id) {
-        if (m.read_at) tick = '<span class="tick read">✓✓</span>';
-        else tick = '<span class="tick">✓✓</span>';
+        tick = m.read_at ? '<span class="tick read">✓✓</span>' : '<span class="tick">✓✓</span>';
       }
-    } else if (u.last_seen) {
-      time = formatTime(u.last_seen);
     }
 
     const previewClass = item.unread > 0 ? 'preview unread' : 'preview';
+    const dataId = isGroup ? 'group:' + item.group.id : 'user:' + item.otherUser.id;
 
-    return '<div class="chat-item ' + active + '" data-id="' + u.id + '">' +
+    return '<div class="chat-item ' + extraClass + ' ' + active + '" data-id="' + dataId + '">' +
       '<div class="avatar" style="background:' + avStyle + '">' + avHtml + onlineDot + unreadBadge + '</div>' +
       '<div class="body">' +
         '<div class="row1">' +
           '<div class="name">' + escapeHtml(name) + '</div>' +
-          '<div class="meta">' +
-            (item.conversation?.pinned_at ? '<span class="pin-icon">📌</span>' : '') +
-            '<span>' + time + '</span>' +
-          '</div>' +
+          '<div class="meta"><span>' + time + '</span></div>' +
         '</div>' +
-        '<div class="row2">' +
-          '<div class="' + previewClass + '">' + tick + escapeHtml(preview) + '</div>' +
-        '</div>' +
+        '<div class="row2"><div class="' + previewClass + '">' + tick + escapeHtml(preview) + '</div></div>' +
       '</div>' +
     '</div>';
   }).join('');
 
   list.querySelectorAll('.chat-item').forEach(el => {
-    el.onclick = () => selectUser(el.dataset.id);
+    el.onclick = () => {
+      const id = el.dataset.id;
+      if (id.startsWith('group:')) {
+        selectGroup(id.substring(6));
+      } else {
+        selectUser(id.substring(5));
+      }
+    };
   });
 }
+
 
 function updateUnreadTabBadge() {
   const total = chatList.reduce((sum, i) => sum + (i.unread || 0), 0);
@@ -362,6 +427,8 @@ async function selectUser(otherId) {
   if (!other) return;
 
   currentOtherUser = other;
+  currentGroup = null;
+  currentChatType = 'private';
   clearAttachment();
   replyTo = null;
   cancelEdit();
@@ -411,6 +478,11 @@ async function selectUser(otherId) {
 }
 
 function updateChatStatus() {
+  if (currentChatType === 'group' && currentGroup) {
+    $('chatStatus').textContent = 'گروه';
+    $('chatStatus').classList.remove('online', 'typing');
+    return;
+  }
   if (!currentOtherUser) return;
   const el = $('chatStatus');
   if (currentOtherUser.is_online) {
@@ -430,20 +502,22 @@ function updateChatStatus() {
   }
 }
 
+
 // ═══════════════════ MESSAGES ═══════════════════
 async function loadMessages() {
-  if (!currentConversation) return;
+  const isGroup = currentChatType === 'group';
+  if (!isGroup && !currentConversation) return;
+  if (isGroup && !currentGroup) return;
 
-  const { data, error } = await supabase.from('messages').select('*')
-    .eq('conversation_id', currentConversation.id)
-    .order('created_at', { ascending: true })
-    .limit(300);
+  let query = supabase.from('messages').select('*');
+  if (isGroup) query = query.eq('group_id', currentGroup.id);
+  else query = query.eq('conversation_id', currentConversation.id);
 
+  const { data, error } = await query.order('created_at', { ascending: true }).limit(300);
   if (error) { showToast('خطا: ' + error.message, 'error'); return; }
 
   allMessages = data || [];
 
-  // واکنش‌ها
   const ids = allMessages.map(m => m.id);
   reactionsMap = {};
   if (ids.length) {
@@ -510,7 +584,11 @@ function renderMessage(msg, prevMsg) {
   if (empty) empty.remove();
 
   const isMine = msg.sender_id === currentUser.id;
-  const sender = isMine ? currentProfile : currentOtherUser;
+  const isGroup = currentChatType === 'group';
+  let sender = isMine ? currentProfile : currentOtherUser;
+  if (isGroup && !isMine) {
+    sender = allUsers.find(u => u.id === msg.sender_id) || { username: 'کاربر' };
+  }
   const name = sender?.display_name || sender?.username || '?';
 
   const div = document.createElement('div');
@@ -580,8 +658,12 @@ function renderMessage(msg, prevMsg) {
     ).join('') + '</div>';
   }
 
+  const senderNameHtml = (isGroup && !isMine)
+    ? '<div class="sender-name">' + escapeHtml(name) + '</div>'
+    : '';
+
   div.innerHTML =
-    '<div class="bubble">' + replyHtml + attachHtml + textHtml +
+    '<div class="bubble">' + senderNameHtml + replyHtml + attachHtml + textHtml +
       '<span class="meta">' + editedHtml + formatTime(msg.created_at) + tickHtml + '</span>' +
     '</div>' +
     reactionsHtml;
@@ -624,17 +706,20 @@ function formatDuration(sec) {
 // ═══════════════════ REALTIME ═══════════════════
 function subscribeMessages() {
   if (messagesChannel) supabase.removeChannel(messagesChannel);
-  messagesChannel = supabase.channel('msg-' + currentConversation.id)
+  const isGroup = currentChatType === 'group';
+  const filterField = isGroup ? 'group_id' : 'conversation_id';
+  const filterValue = isGroup ? currentGroup.id : currentConversation.id;
+
+  messagesChannel = supabase.channel('msg-' + filterField + '-' + filterValue)
     .on('postgres_changes', {
       event: 'INSERT', schema: 'public', table: 'messages',
-      filter: 'conversation_id=eq.' + currentConversation.id
+      filter: filterField + '=eq.' + filterValue
     }, (payload) => {
       const msg = payload.new;
       if (document.querySelector('[data-id="' + msg.id + '"]')) return;
       const prev = allMessages[allMessages.length - 1];
       allMessages.push(msg);
 
-      // اگه تاریخ عوض شده، separator اضافه کن
       if (shouldShowDate(msg, prev)) {
         const sep = document.createElement('div');
         sep.className = 'date-separator';
@@ -647,7 +732,7 @@ function subscribeMessages() {
 
       if (msg.sender_id !== currentUser.id) {
         markAsRead();
-        playMsgSound();
+        if (!isGroup || !document.hasFocus()) playMsgSound();
         notifyNewMessage(msg);
       }
       updatePinnedBanner();
@@ -657,7 +742,6 @@ function subscribeMessages() {
       const el = document.querySelector('[data-id="' + payload.old.id + '"]');
       if (el) el.remove();
       allMessages = allMessages.filter(m => m.id !== payload.old.id);
-      if (pinnedMsg?.id === payload.old.id) { pinnedMsg = null; updatePinnedBanner(); }
     })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (payload) => {
       const msg = payload.new;
@@ -679,6 +763,7 @@ function subscribeAllMessages() {
       if (currentConversation && msg.conversation_id === currentConversation.id) return;
       // به‌روز لیست
       await loadChatList();
+      // msg.group_id یا conversation_id
       // اعلان اگر مال من نیست
       if (msg.sender_id !== currentUser.id) {
         notifyNewMessage(msg);
@@ -802,7 +887,9 @@ async function sendMessage() {
     return;
   }
 
-  if ((!content && !pendingAttachment) || !currentConversation) return;
+  if ((!content && !pendingAttachment)) return;
+  if (currentChatType === 'group' && !currentGroup) return;
+  if (currentChatType === 'private' && !currentConversation) return;
   const sendBtn = $('sendBtn');
   sendBtn.disabled = true;
 
@@ -813,10 +900,11 @@ async function sendMessage() {
     }
 
     const row = {
-      conversation_id: currentConversation.id,
       sender_id: currentUser.id,
       content: content || ''
     };
+    if (currentChatType === 'group') row.group_id = currentGroup.id;
+    else row.conversation_id = currentConversation.id;
     if (attach) {
       row.attachment_url = attach.url;
       row.attachment_type = attach.type;
@@ -976,7 +1064,8 @@ async function uploadAttachment() {
 
   const ts = Date.now();
   const safeName = finalFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const path = currentUser.id + '/' + currentConversation.id + '/' + ts + '-' + safeName;
+  const ctxId = currentChatType === 'group' ? currentGroup.id : currentConversation.id;
+  const path = currentUser.id + '/' + ctxId + '/' + ts + '-' + safeName;
 
   const { error } = await supabase.storage.from(BUCKET).upload(path, finalFile, {
     cacheControl: '3600', upsert: false, contentType: finalFile.type
@@ -1399,28 +1488,48 @@ $('lightbox') && ($('lightbox').onclick = (e) => { if (e.target.id === 'lightbox
 
 // ═══════════════════ MISC ═══════════════════
 async function markAsRead() {
-  if (!currentConversation) return;
-  await supabase.from('messages').update({ read_at: new Date().toISOString() })
-    .eq('conversation_id', currentConversation.id)
-    .neq('sender_id', currentUser.id).is('read_at', null);
-  const item = chatList.find(i => i.conversation?.id === currentConversation.id);
+  const isGroup = currentChatType === 'group';
+  let query = supabase.from('messages').update({ read_at: new Date().toISOString() });
+  if (isGroup) {
+    if (!currentGroup) return;
+    query = query.eq('group_id', currentGroup.id);
+  } else {
+    if (!currentConversation) return;
+    query = query.eq('conversation_id', currentConversation.id);
+  }
+  await query.neq('sender_id', currentUser.id).is('read_at', null);
+
+  const item = chatList.find(i =>
+    isGroup ? i.group?.id === currentGroup.id : i.conversation?.id === currentConversation?.id
+  );
   if (item) item.unread = 0;
   updateUnreadTabBadge();
 }
 
+
 function broadcastTyping() {
-  if (!currentConversation) return;
-  if (!typingChannel) {
-    typingChannel = supabase.channel('typing-' + currentConversation.id);
+  const isGroup = currentChatType === 'group';
+  const ctxId = isGroup ? currentGroup?.id : currentConversation?.id;
+  if (!ctxId) return;
+
+  if (!typingChannel || typingChannel._ctxId !== ctxId) {
+    if (typingChannel) supabase.removeChannel(typingChannel);
+    typingChannel = supabase.channel('typing-' + ctxId);
+    typingChannel._ctxId = ctxId;
     typingChannel.on('broadcast', { event: 'typing' }, ({ payload }) => {
       if (payload.user_id !== currentUser.id) {
         $('typingRow').style.display = 'flex';
-        $('chatStatus').textContent = 'در حال نوشتن...';
-        $('chatStatus').classList.add('typing');
+        if (isGroup) {
+          const sender = allUsers.find(u => u.id === payload.user_id);
+          const name = sender?.display_name || sender?.username || 'کسی';
+          $('typingText').textContent = name + ' در حال نوشتن...';
+        } else {
+          $('typingText').textContent = 'در حال نوشتن...';
+        }
         clearTimeout(typingTimer);
         typingTimer = setTimeout(() => {
           $('typingRow').style.display = 'none';
-          updateChatStatus();
+          if (!isGroup) updateChatStatus();
         }, 2500);
       }
     }).subscribe();
@@ -1428,42 +1537,7 @@ function broadcastTyping() {
   typingChannel.send({ type: 'broadcast', event: 'typing', payload: { user_id: currentUser.id } });
 }
 
-// صدا
-function playMsgSound() {
-  try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.connect(g); g.connect(audioCtx.destination);
-    o.frequency.setValueAtTime(880, audioCtx.currentTime);
-    o.frequency.setValueAtTime(660, audioCtx.currentTime + 0.08);
-    g.gain.setValueAtTime(0.12, audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
-    o.start(); o.stop(audioCtx.currentTime + 0.25);
-  } catch (e) {}
-}
-function playSendSound() {
-  try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.connect(g); g.connect(audioCtx.destination);
-    o.frequency.setValueAtTime(440, audioCtx.currentTime);
-    o.frequency.setValueAtTime(880, audioCtx.currentTime + 0.08);
-    g.gain.setValueAtTime(0.06, audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
-    o.start(); o.stop(audioCtx.currentTime + 0.18);
-  } catch (e) {}
-}
 
-// اعلان
-async function requestNotifPermission() {
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'granted') { notificationGranted = true; return; }
-  if (Notification.permission === 'denied') return;
-  const p = await Notification.requestPermission();
-  notificationGranted = p === 'granted';
-}
 
 function notifyNewMessage(msg) {
   if (!notificationGranted) return;
@@ -1477,4 +1551,141 @@ function notifyNewMessage(msg) {
 }
 
 // ═══════════════════ START ═══════════════════
+
+// ═══════════════════════════════════════════
+// 👥 گروه چت
+// ═══════════════════════════════════════════
+function setupGroups() {
+  $('newGroupBtn').onclick = () => openCreateGroupModal();
+  $('createGroupClose').onclick = () => $('createGroupModal').style.display = 'none';
+  $('createGroupModal').onclick = (e) => {
+    if (e.target.id === 'createGroupModal') $('createGroupModal').style.display = 'none';
+  };
+  $('createGroupBtn').onclick = createGroup;
+
+  // Emoji picker برای آواتار
+  document.querySelectorAll('#groupEmojiRow button').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('#groupEmojiRow button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      $('groupAvatarPreview').textContent = btn.dataset.emoji;
+    };
+  });
+}
+
+function openCreateGroupModal() {
+  if (!allUsers.length) { showToast('کاربر دیگری نیست', 'error'); return; }
+  $('groupNameInput').value = '';
+  $('groupAvatarPreview').textContent = '👥';
+  document.querySelectorAll('#groupEmojiRow button').forEach((b, i) => {
+    b.classList.toggle('active', i === 0);
+  });
+
+  const picker = $('memberPicker');
+  picker.innerHTML = allUsers.map(u => {
+    const name = u.display_name || u.username;
+    const color = avatarColor(u.id);
+    const avHtml = u.avatar_url
+      ? '<img src="' + u.avatar_url + '">'
+      : getInitials(name);
+    return '<div class="member-item" data-id="' + u.id + '">' +
+      '<div class="avatar" style="background:' + (u.avatar_url ? 'transparent' : color) + '">' + avHtml + '</div>' +
+      '<div class="name">' + escapeHtml(name) + '</div>' +
+      '<div class="check">✓</div>' +
+    '</div>';
+  }).join('');
+
+  picker.querySelectorAll('.member-item').forEach(el => {
+    el.onclick = () => el.classList.toggle('selected');
+  });
+
+  $('createGroupModal').style.display = 'flex';
+}
+
+async function createGroup() {
+  const name = $('groupNameInput').value.trim();
+  if (!name) { showToast('نام گروه را وارد کن', 'error'); return; }
+
+  const selected = [...document.querySelectorAll('#memberPicker .member-item.selected')]
+    .map(el => el.dataset.id);
+  if (!selected.length) { showToast('حداقل یک عضو انتخاب کن', 'error'); return; }
+
+  const emoji = $('groupAvatarPreview').textContent || '👥';
+  const btn = $('createGroupBtn');
+  btn.disabled = true;
+  btn.textContent = 'در حال ساخت...';
+
+  try {
+    const { data: group, error: gErr } = await supabase
+      .from('groups')
+      .insert({ name, avatar_emoji: emoji, created_by: currentUser.id })
+      .select()
+      .single();
+    if (gErr) throw gErr;
+
+    const members = [
+      { group_id: group.id, user_id: currentUser.id, role: 'admin' },
+      ...selected.map(uid => ({ group_id: group.id, user_id: uid, role: 'member' }))
+    ];
+    const { error: mErr } = await supabase.from('group_members').insert(members);
+    if (mErr) throw mErr;
+
+    await loadGroups();
+    await loadChatList();
+    $('createGroupModal').style.display = 'none';
+    showToast('گروه ساخته شد 🎉', 'success');
+    setTimeout(() => selectGroup(group.id), 400);
+  } catch (e) {
+    showToast('خطا: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'ساخت گروه';
+  }
+}
+
+async function selectGroup(groupId) {
+  const group = allGroups.find(g => g.id === groupId);
+  if (!group) return;
+
+  currentGroup = group;
+  currentConversation = null;
+  currentOtherUser = null;
+  currentChatType = 'group';
+  clearAttachment();
+  replyTo = null;
+  cancelEdit();
+
+  $('chatName').textContent = group.name;
+  $('chatStatus').textContent = 'گروه';
+  $('chatStatus').classList.remove('online', 'typing');
+
+  const av = $('chatAvatar');
+  av.innerHTML = group.avatar_url ? '<img src="' + group.avatar_url + '">' : (group.avatar_emoji || '👥');
+  av.style.background = group.avatar_url ? 'transparent' : 'linear-gradient(135deg, #FFB84D, #FF6B9D)';
+
+  $('chatEmpty').style.display = 'none';
+  $('chatActive').style.display = 'flex';
+  $('sidebar').classList.add('hidden');
+  document.body.classList.add('in-chat');
+
+  renderChatList();
+  await loadMessages();
+  subscribeMessages();
+  subscribeReactions();
+  setTimeout(() => $('messageInput').focus(), 200);
+}
+
+async function subscribeGroups() {
+  supabase.channel('groups-live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'groups' }, async () => {
+      await loadGroups();
+      await loadChatList();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members' }, async () => {
+      await loadGroups();
+      await loadChatList();
+    })
+    .subscribe();
+}
+
 init();

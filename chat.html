@@ -26,6 +26,7 @@
         <p id="myStatus">آنلاین</p>
       </div>
       <button class="icon-btn" id="newChatBtn" title="چت جدید">✏️</button>
+      <button class="icon-btn" id="newGroupBtn" title="گروه جدید">👥</button>
       <button class="icon-btn" id="themeBtn" title="تم">🌙</button>
       <button class="icon-btn" id="menuBtn" title="منو">⋮</button>
     </div>
@@ -35,6 +36,7 @@
       <button class="active" data-tab="all">همه</button>
       <button data-tab="unread">خوانده‌نشده <span class="tab-badge" id="unreadTabBadge" style="display:none">0</span></button>
       <button data-tab="online">آنلاین</button>
+      <button data-tab="groups">👥 گروه‌ها</button>
     </div>
 
     <!-- Search -->
@@ -244,6 +246,39 @@
 </div>
 
 <!-- ═══════════ LIGHTBOX ═══════════ -->
+<div class="modal-bg" id="createGroupModal" style="display:none">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>👥 گروه جدید</h3>
+      <button id="createGroupClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="group-avatar-picker">
+        <div class="group-avatar-preview" id="groupAvatarPreview">👥</div>
+        <div class="emoji-row" id="groupEmojiRow">
+          <button class="active" data-emoji="👥">👥</button>
+          <button data-emoji="🎉">🎉</button>
+          <button data-emoji="🎮">🎮</button>
+          <button data-emoji="💼">💼</button>
+          <button data-emoji="❤️">❤️</button>
+          <button data-emoji="⚽">⚽</button>
+          <button data-emoji="🎵">🎵</button>
+          <button data-emoji="🍕">🍕</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>نام گروه</label>
+        <input type="text" id="groupNameInput" placeholder="مثلاً: دوستان" maxlength="50">
+      </div>
+      <div class="form-group">
+        <label>اعضا</label>
+        <div class="member-picker" id="memberPicker"></div>
+      </div>
+      <button class="btn-primary" id="createGroupBtn">ساخت گروه</button>
+    </div>
+  </div>
+</div>
+
 <div class="lightbox" id="lightbox">
   <button class="lightbox-close" id="lightboxClose">✕</button>
   <img id="lightboxImg" src="" alt="">

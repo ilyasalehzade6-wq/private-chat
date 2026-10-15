@@ -1522,3 +1522,141 @@ body.dark .message.theirs .bubble {
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(155,165,183,.6); }
+
+/* ═══════════════════════════════════════════
+   👥 گروه چت
+   ═══════════════════════════════════════════ */
+
+/* آیتم گروه در لیست */
+.chat-item.group-item .avatar {
+  background: linear-gradient(135deg, #FFB84D, #FF6B9D) !important;
+  font-size: 24px;
+}
+
+.chat-item.group-item .avatar img {
+  border-radius: 50%;
+}
+
+/* پیشوند در preview گروه */
+.chat-item.group-item .row2 .preview .sender-name {
+  color: var(--primary);
+  font-weight: 700;
+  margin-left: 3px;
+}
+
+/* ═══ Emoji Picker آواتار گروه ═══ */
+.group-avatar-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.group-avatar-preview {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FFB84D, #FF6B9D);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44px;
+  box-shadow: 0 12px 30px -8px rgba(255, 107, 157, 0.5);
+  border: 4px solid var(--card);
+}
+.emoji-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.emoji-row button {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  background: var(--bg);
+  font-size: 20px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.emoji-row button:hover {
+  background: var(--card-hover);
+  transform: scale(1.1);
+}
+.emoji-row button.active {
+  border-color: var(--primary);
+  background: rgba(123, 79, 224, 0.12);
+  transform: scale(1.05);
+}
+
+/* ═══ Member Picker ═══ */
+.member-picker {
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 6px;
+  margin-top: 4px;
+}
+.member-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background .15s;
+  user-select: none;
+}
+.member-item:hover { background: var(--card-hover); }
+.member-item.selected {
+  background: rgba(123, 79, 224, 0.1);
+  border: 1.5px solid rgba(123, 79, 224, 0.3);
+}
+.member-item .avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.member-item .avatar img { width: 100%; height: 100%; object-fit: cover; }
+.member-item .name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.member-item .check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: transparent;
+  transition: all .15s;
+}
+.member-item.selected .check {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* ═══ نام فرستنده در گروه ═══ */
+.message .sender-name {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 2px;
+  color: var(--primary);
+}
+.message.mine .sender-name { display: none; }
