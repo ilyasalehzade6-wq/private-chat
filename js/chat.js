@@ -229,13 +229,19 @@ function setupUI() {
     $('sidebar').classList.remove('hidden');
     $('searchInput').focus();
   };
-  $('menuBtn').onclick = (e) => {
-    showMenu(e, [
-      { icon: '👤', label: 'پروفایل من', action: openProfileModal },
-      { icon: '🌙', label: 'تغییر تم', action: toggleTheme },
-      { icon: '🚪', label: 'خروج', action: doLogout, danger: true }
-    ]);
-  };
+  const _menuBtn = $('menuBtn');
+  if (_menuBtn) {
+    _menuBtn.onclick = (e) => {
+      e.stopPropagation();
+      const r = _menuBtn.getBoundingClientRect();
+      showMenu({ clientX: r.left + r.width/2, clientY: r.bottom + 4 }, [
+        { icon: '👤', label: 'پروفایل من', action: openProfileModal },
+        { icon: '🌙', label: 'تغییر تم', action: toggleTheme },
+        { icon: '🔍', label: 'جستجوی همه‌جانبه', action: openGlobalSearch },
+        { icon: '🚪', label: 'خروج', action: doLogout, danger: true }
+      ]);
+    };
+  }
 
   $('chatInfoBtn').onclick = () => showToast('اطلاعات کاربر به‌زودی');
   $('callVoiceBtn').onclick = () => showToast('تماس صوتی به‌زودی 🔜');
@@ -1343,58 +1349,47 @@ function showMessageMenu(e, msg) {
 
 function showMenu(e, items) {
   const menu = $('contextMenu');
+  if (!menu) return;
   menu.innerHTML = items.map((it, i) =>
     '<button data-i="' + i + '"' + (it.danger ? ' class="danger"' : '') + '>' +
       '<span class="emoji">' + it.icon + '</span>' + it.label +
     '</button>'
   ).join('');
-
-  // ابتدا مخفی ولی قابل اندازه‌گیری
   menu.style.display = 'block';
   menu.style.visibility = 'hidden';
-  menu.style.left = '0';
-  menu.style.top = '0';
-  menu.style.right = 'auto';
-  menu.style.bottom = 'auto';
+  menu.style.left = '0px';
+  menu.style.top = '0px';
   menu.style.maxHeight = 'none';
-
-  // اندازه‌گیری
   const rect = menu.getBoundingClientRect();
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const pad = 10;
-
-  // انتخاب جهت افقی
-  let x = e.clientX;
+  const pad = 12;
+  let x = e.clientX || 100;
+  let y = e.clientY || 100;
   if (x + rect.width + pad > vw) x = vw - rect.width - pad;
   if (x < pad) x = pad;
-
-  // انتخاب جهت عمودی
-  let y = e.clientY;
-  const spaceBelow = vh - y - pad;
-  const spaceAbove = y - pad;
-
-  if (spaceBelow < rect.height && spaceAbove > spaceBelow) {
-    // از پایین به بالا باز شو
-    y = y - rect.height;
-    if (y < pad) y = pad;
-  } else if (spaceBelow < rect.height) {
-    // محدودیت ارتفاع
-    y = pad;
-    menu.style.maxHeight = (vh - 2 * pad) + 'px';
-    menu.style.overflowY = 'auto';
+  if (y + rect.height + pad > vh) {
+    const aboveY = y - rect.height;
+    if (aboveY > pad) y = aboveY;
+    else { y = pad; menu.style.maxHeight = (vh - 2*pad) + 'px'; menu.style.overflowY = 'auto'; }
   }
-
+  if (y < pad) y = pad;
   menu.style.left = x + 'px';
   menu.style.top = y + 'px';
   menu.style.visibility = 'visible';
-
   menu.querySelectorAll('button').forEach(b => {
     b.onclick = () => {
       menu.style.display = 'none';
-      items[+b.dataset.i].action();
+      menu.style.maxHeight = 'none';
+      menu.style.overflowY = 'visible';
+      const item = items[+b.dataset.i];
+      if (item && item.action) item.action();
     };
   });
+  const escHandler = (ev) => {
+    if (ev.key === 'Escape') { menu.style.display = 'none'; document.removeEventListener('keydown', escHandler); }
+  };
+  document.addEventListener('keydown', escHandler);
 }
 
 function setupContextMenuClose() {
