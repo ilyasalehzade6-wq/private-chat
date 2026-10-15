@@ -1350,33 +1350,64 @@ function showMessageMenu(e, msg) {
 function showMenu(e, items) {
   const menu = $('contextMenu');
   if (!menu) return;
+
   menu.innerHTML = items.map((it, i) =>
     '<button data-i="' + i + '"' + (it.danger ? ' class="danger"' : '') + '>' +
       '<span class="emoji">' + it.icon + '</span>' + it.label +
     '</button>'
   ).join('');
-  menu.style.display = 'block';
-  menu.style.visibility = 'hidden';
-  menu.style.left = '0px';
-  menu.style.top = '0px';
-  menu.style.maxHeight = 'none';
+
+  // غیرفعال کردن انیمیشن + ریست موقعیت برای اندازه‌گیری دقیق
+  menu.style.cssText = [
+    'display: block',
+    'visibility: hidden',
+    'left: 0px',
+    'top: 0px',
+    'right: auto',
+    'bottom: auto',
+    'max-height: none',
+    'overflow-y: visible',
+    'transform: none',
+    'animation: none',
+    'transition: none',
+    'position: fixed',
+    'z-index: 999999'
+  ].join(';');
+
+  // Force reflow
+  void menu.offsetWidth;
+  void menu.offsetHeight;
+
   const rect = menu.getBoundingClientRect();
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const pad = 12;
+
   let x = e.clientX || 100;
   let y = e.clientY || 100;
+
+  // افقی
   if (x + rect.width + pad > vw) x = vw - rect.width - pad;
   if (x < pad) x = pad;
+
+  // عمودی
   if (y + rect.height + pad > vh) {
     const aboveY = y - rect.height;
-    if (aboveY > pad) y = aboveY;
-    else { y = pad; menu.style.maxHeight = (vh - 2*pad) + 'px'; menu.style.overflowY = 'auto'; }
+    if (aboveY > pad) {
+      y = aboveY;
+    } else {
+      y = pad;
+      menu.style.maxHeight = (vh - 2 * pad) + 'px';
+      menu.style.overflowY = 'auto';
+    }
   }
   if (y < pad) y = pad;
+
   menu.style.left = x + 'px';
   menu.style.top = y + 'px';
   menu.style.visibility = 'visible';
+  menu.style.animation = 'popIn .15s ease';
+
   menu.querySelectorAll('button').forEach(b => {
     b.onclick = () => {
       menu.style.display = 'none';
@@ -1386,8 +1417,12 @@ function showMenu(e, items) {
       if (item && item.action) item.action();
     };
   });
+
   const escHandler = (ev) => {
-    if (ev.key === 'Escape') { menu.style.display = 'none'; document.removeEventListener('keydown', escHandler); }
+    if (ev.key === 'Escape') {
+      menu.style.display = 'none';
+      document.removeEventListener('keydown', escHandler);
+    }
   };
   document.addEventListener('keydown', escHandler);
 }
