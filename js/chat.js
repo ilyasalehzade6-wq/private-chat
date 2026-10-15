@@ -215,6 +215,28 @@ function hasDraft(chatId, kind) {
 }
 
 // ═══════════════════ UI BINDINGS ═══════════════════
+
+function openChatMenu() {
+  const btn = $('chatMenuBtn');
+  if (!btn) return;
+  const r = btn.getBoundingClientRect();
+  const isMuted = currentChatType === 'group'
+    ? currentGroup?.muted
+    : currentConversation?.muted;
+  const isPinned = !!pinnedMsg;
+  showMenu(
+    { clientX: r.left + r.width / 2, clientY: r.bottom + 4 },
+    [
+      { icon: '🔍', label: 'جستجو در چت', action: () => toggleSearchBar(true) },
+      { icon: '📌', label: isPinned ? 'رفتن به پین' : 'پیام پین‌شده', action: () => pinnedMsg && scrollToMessage(pinnedMsg.id) },
+      { icon: isMuted ? '🔔' : '🔕', label: isMuted ? 'صدادار کردن' : 'بی‌صدا کردن', action: toggleMute },
+      { icon: '🎨', label: 'والپیپر', action: openWallpaperModal },
+      { icon: '📥', label: 'آرشیو گفتگو', action: () => showToast('به‌زودی', 'info') },
+      { icon: '🗑', label: 'حذف گفتگو', action: () => showToast('به‌زودی', 'info'), danger: true }
+    ]
+  );
+}
+
 function setupUI() {
   $('backBtn').onclick = () => {
     $('sidebar').classList.remove('hidden');
@@ -244,20 +266,15 @@ function setupUI() {
   }
 
   $('chatInfoBtn').onclick = () => showToast('اطلاعات کاربر به‌زودی');
+
+  // منوی چت با موقعیت دکمه
+  const _cmb = $('chatMenuBtn');
+  if (_cmb) {
+    _cmb.onclick = (e) => { e.stopPropagation(); openChatMenu(); };
+  }
   $('callVoiceBtn').onclick = () => showToast('تماس صوتی به‌زودی 🔜');
   $('callVideoBtn').onclick = () => showToast('تماس تصویری به‌زودی 🔜');
-  $('chatMenuBtn').onclick = (e) => {
-    const isMuted = currentChatType === 'group'
-      ? currentGroup?.muted
-      : currentConversation?.muted;
-    showMenu(e, [
-      { icon: '🔍', label: 'جستجو', action: () => toggleSearchBar(true) },
-      { icon: '📌', label: 'پیام‌های پین', action: () => pinnedMsg && scrollToMessage(pinnedMsg.id) },
-      { icon: '🔕', label: isMuted ? 'صدادار کردن' : 'بی‌صدا کردن', action: toggleMute },
-      { icon: '🎨', label: 'والپیپر', action: openWallpaperModal },
-      { icon: '🗑', label: 'حذف گفتگو', action: () => showToast('به‌زودی'), danger: true }
-    ]);
-  };
+
 
   $('logoutBtn')?.addEventListener('click', doLogout);
 }
