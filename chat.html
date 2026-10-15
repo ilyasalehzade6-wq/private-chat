@@ -220,6 +220,39 @@
 <div class="context-menu" id="contextMenu" style="display:none"></div>
 
 <!-- ═══════════ PROFILE MODAL ═══════════ -->
+<div class="modal-bg" id="wallpaperModal" style="display:none">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>🎨 والپیپر</h3>
+      <button id="wallpaperClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="wallpaper-section">
+        <div class="wallpaper-label">رنگ ساده</div>
+        <div class="color-grid" id="wpColorGrid"></div>
+      </div>
+      <div class="wallpaper-section">
+        <div class="wallpaper-label">گرادیان</div>
+        <div class="gradient-grid" id="wpGradientGrid"></div>
+      </div>
+      <div class="wallpaper-section">
+        <div class="wallpaper-label">الگو</div>
+        <div class="pattern-grid" id="wpPatternGrid"></div>
+      </div>
+      <div class="wallpaper-section">
+        <div class="wallpaper-label">تصویر خودت</div>
+        <label class="btn-upload-wallpaper">
+          <input type="file" id="wallpaperUpload" accept="image/*">
+          📷 انتخاب تصویر
+        </label>
+      </div>
+      <button class="btn-secondary" id="wallpaperReset" style="margin-top:16px">
+        🗑 حذف والپیپر
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="savedModal" style="display:none">
   <div class="modal modal-wide">
     <div class="modal-head">
