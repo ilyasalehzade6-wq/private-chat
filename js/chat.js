@@ -1315,14 +1315,46 @@ function showMenu(e, items) {
       '<span class="emoji">' + it.icon + '</span>' + it.label +
     '</button>'
   ).join('');
-  menu.style.display = 'block';
 
+  // ابتدا مخفی ولی قابل اندازه‌گیری
+  menu.style.display = 'block';
+  menu.style.visibility = 'hidden';
+  menu.style.left = '0';
+  menu.style.top = '0';
+  menu.style.right = 'auto';
+  menu.style.bottom = 'auto';
+  menu.style.maxHeight = 'none';
+
+  // اندازه‌گیری
   const rect = menu.getBoundingClientRect();
-  let x = e.clientX, y = e.clientY;
-  if (x + rect.width > window.innerWidth - 10) x = window.innerWidth - rect.width - 10;
-  if (y + rect.height > window.innerHeight - 10) y = window.innerHeight - rect.height - 10;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const pad = 10;
+
+  // انتخاب جهت افقی
+  let x = e.clientX;
+  if (x + rect.width + pad > vw) x = vw - rect.width - pad;
+  if (x < pad) x = pad;
+
+  // انتخاب جهت عمودی
+  let y = e.clientY;
+  const spaceBelow = vh - y - pad;
+  const spaceAbove = y - pad;
+
+  if (spaceBelow < rect.height && spaceAbove > spaceBelow) {
+    // از پایین به بالا باز شو
+    y = y - rect.height;
+    if (y < pad) y = pad;
+  } else if (spaceBelow < rect.height) {
+    // محدودیت ارتفاع
+    y = pad;
+    menu.style.maxHeight = (vh - 2 * pad) + 'px';
+    menu.style.overflowY = 'auto';
+  }
+
   menu.style.left = x + 'px';
   menu.style.top = y + 'px';
+  menu.style.visibility = 'visible';
 
   menu.querySelectorAll('button').forEach(b => {
     b.onclick = () => {
