@@ -200,6 +200,9 @@ async function init() {
   setupSaved();
   setupWallpaper();
   setupStickers();
+  setupSettings();
+  setupPublicProfile();
+  loadUserSettings();
   setupThemeAccent();
   loadSavedMessages();
   renderChatList();
@@ -288,6 +291,7 @@ function setupUI() {
         { icon: '👤', label: 'پروفایل من', action: openProfileModal },
         { icon: '🌙', label: 'حالت تاریک/روشن', action: toggleTheme },
       { icon: '🎨', label: 'رنگ تم', action: () => { $('themeModal').style.display = 'flex'; } },
+      { icon: '⚙️', label: 'تنظیمات', action: () => { $('settingsModal').style.display = 'flex'; } },
         { icon: '🔍', label: 'جستجوی همه‌جانبه', action: openGlobalSearch },
         { icon: '🚪', label: 'خروج', action: doLogout, danger: true }
       ]);
@@ -1376,6 +1380,15 @@ function setupEmoji() {
   });
 
   $('emojiBtn').onclick = (e) => {
+    // اطمینان از ساختار درست
+    const ec = $('emojiContent');
+    const sc = $('stickerContent');
+    if (ec) ec.style.display = 'flex';
+    if (sc) sc.style.display = 'none';
+    // ریست تب‌ها
+    document.querySelectorAll('#emojiMainTabs button').forEach(b => {
+      b.classList.toggle('active', b.dataset.main === 'emoji');
+    });
     e.stopPropagation();
     picker.style.display = picker.style.display === 'none' ? 'flex' : 'none';
   };
@@ -1803,8 +1816,14 @@ async function saveProfile() {
       avatar_url = pub.publicUrl;
     }
 
+    // تولید public_id در صورت نبود
+    let public_id = currentProfile?.public_id;
+    if (!public_id) {
+      public_id = '@' + (currentProfile?.username || 'user') + String(Math.floor(Math.random() * 9000) + 1000);
+    }
+
     const { error } = await supabase.from('profiles')
-      .update({ display_name: displayName, avatar_url })
+      .update({ display_name: displayName, avatar_url, public_id })
       .eq('id', currentUser.id);
     if (error) throw error;
 
@@ -2502,29 +2521,43 @@ function linkifyText(text) {
 // ═══════════════════════════════════════════
 function setupStickers() {
   // تب اصلی emoji / sticker
-  document.querySelectorAll('#emojiMainTabs button').forEach(btn => {
-    btn.onclick = () => {
-      document.querySelectorAll('#emojiMainTabs button').forEach(b => b.classList.remove('active'));
+  const mainTabs = document.querySelectorAll('#emojiMainTabs button');
+  console.log('Sticker: found tabs =', mainTabs.length);
+
+  mainTabs.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      mainTabs.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       const main = btn.dataset.main;
-      $('emojiContent').style.display = main === 'emoji' ? 'flex' : 'none';
-      $('stickerContent').style.display = main === 'sticker' ? 'flex' : 'none';
-    };
+      const emojiContent = $('emojiContent');
+      const stickerContent = $('stickerContent');
+
+      if (main === 'emoji') {
+        emojiContent.style.display = 'flex';
+        stickerContent.style.display = 'none';
+      } else {
+        emojiContent.style.display = 'none';
+        stickerContent.style.display = 'flex';
+        renderStickers();
+      }
+    });
   });
 
   // پک‌ها
   const packs = $('stickerPacks');
   if (packs) {
     packs.innerHTML = Object.keys(STICKER_PACKS).map((name, i) =>
-      '<button data-pack="' + name + '"' + (i === 0 ? ' class="active"' : '') + '>' + name + '</button>'
+      '<button type="button" data-pack="' + name + '"' + (i === 0 ? ' class="active"' : '') + '>' + name + '</button>'
     ).join('');
     packs.querySelectorAll('button').forEach(b => {
-      b.onclick = () => {
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
         packs.querySelectorAll('button').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
         currentStickerPack = b.dataset.pack;
         renderStickers();
-      };
+      });
     });
   }
 
@@ -2637,6 +2670,248 @@ function applyAccent(key, save = true) {
       .catch(() => {});
   }
 }
+
+
+// ═══════════════════════════════════════════
+// ⚙️ Settings
+// ═══════════════════════════════════════════
+let userSettings = {
+  notifications: true,
+  notification_sound: true,
+  read_receipts: true,
+  last_seen_visible: true,
+  auto_download: true
+};
+
+function setupSettings() {
+  const btn = $('settingsBtn');
+  if (!btn) return;
+
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    $('settingsModal').style.display = 'flex';
+    updateSettingsUI();
+  };
+
+  const closeBtn = $('settingsClose');
+  if (closeBtn) closeBtn.onclick = () => $('settingsModal').style.display = 'none';
+
+  const modal = $('settingsModal');
+  if (modal) modal.onclick = (e) => {
+    if (e.target.id === 'settingsModal') modal.style.display = 'none';
+  };
+
+  // پروفایل
+  const profileItem = document.querySelector('#settingsModal .setting-item');
+  if (profileItem && !profileItem.id) {
+    profileItem.onclick = () => {
+      $('settingsModal').style.display = 'none';
+      setTimeout(openProfileModal, 150);
+    };
+  }
+
+  // رنگ تم
+  const themeItem = $('openThemeFromSettings');
+  if (themeItem) themeItem.onclick = () => {
+    $('settingsModal').style.display = 'none';
+    setTimeout(() => { $('themeModal').style.display = 'flex'; }, 150);
+  };
+
+  // حالت تاریک
+  const darkItem = $('toggleDarkTheme');
+  if (darkItem) darkItem.onclick = (e) => {
+    if (e.target.closest('.setting-switch')) return;
+    toggleTheme();
+    updateSettingsUI();
+  };
+  const darkSwitch = $('darkThemeSwitch');
+  if (darkSwitch) darkSwitch.onclick = (e) => {
+    e.stopPropagation();
+    toggleTheme();
+    updateSettingsUI();
+  };
+
+  // سوییچ‌ها
+  bindSwitch('notifSwitch', 'notifications');
+  bindSwitch('soundSwitch', 'notification_sound');
+  bindSwitch('readReceiptsSwitch', 'read_receipts');
+  bindSwitch('lastSeenSwitch', 'last_seen_visible');
+
+  // پاک کردن cache
+  const clearBtn = $('clearCacheBtn');
+  if (clearBtn) clearBtn.onclick = async () => {
+    if (!confirm('همه داده‌های موقت پاک شود؟')) return;
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    showToast('cache پاک شد', 'success');
+  };
+
+  // خروج
+  const logoutBtn = $('logoutFromSettings');
+  if (logoutBtn) logoutBtn.onclick = () => {
+    $('settingsModal').style.display = 'none';
+    doLogout();
+  };
+}
+
+function bindSwitch(id, key) {
+  const el = $(id);
+  if (!el) return;
+  el.onclick = (e) => {
+    e.stopPropagation();
+    userSettings[key] = !userSettings[key];
+    el.classList.toggle('on', userSettings[key]);
+    saveUserSettings();
+  };
+}
+
+function updateSettingsUI() {
+  // دارک
+  const darkSwitch = $('darkThemeSwitch');
+  if (darkSwitch) {
+    darkSwitch.classList.toggle('on', document.body.classList.contains('dark'));
+  }
+
+  // سوییچ‌ها
+  ['notifSwitch:notifications', 'soundSwitch:notification_sound',
+   'readReceiptsSwitch:read_receipts', 'lastSeenSwitch:last_seen_visible'].forEach(pair => {
+    const [id, key] = pair.split(':');
+    const el = $(id);
+    if (el) el.classList.toggle('on', !!userSettings[key]);
+  });
+}
+
+async function loadUserSettings() {
+  try {
+    const { data } = await supabase
+      .from('user_settings')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+
+    if (data) {
+      userSettings = { ...userSettings, ...data };
+    } else {
+      // ساخت default
+      await supabase.from('user_settings').insert({ user_id: currentUser.id });
+    }
+    updateSettingsUI();
+  } catch (e) { console.warn(e); }
+}
+
+async function saveUserSettings() {
+  try {
+    await supabase.from('user_settings').upsert({
+      user_id: currentUser.id,
+      ...userSettings,
+      updated_at: new Date().toISOString()
+    });
+  } catch (e) { console.warn(e); }
+}
+
+// ═══════════════════════════════════════════
+// 👤 Public Profile
+// ═══════════════════════════════════════════
+let viewingUser = null;
+
+function setupPublicProfile() {
+  const closeBtn = $('userProfileClose');
+  if (closeBtn) closeBtn.onclick = () => $('userProfileModal').style.display = 'none';
+
+  const modal = $('userProfileModal');
+  if (modal) modal.onclick = (e) => {
+    if (e.target.id === 'userProfileModal') modal.style.display = 'none';
+  };
+
+  // دکمه پیام
+  const ppMsg = $('ppMessage');
+  if (ppMsg) ppMsg.onclick = () => {
+    $('userProfileModal').style.display = 'none';
+    if (viewingUser) {
+      setTimeout(() => selectUser(viewingUser.id), 150);
+    }
+  };
+
+  // تماس
+  const ppCall = $('ppCall');
+  if (ppCall) ppCall.onclick = () => showToast('تماس به‌زودی 🔜', 'info');
+
+  // بیشتر
+  const ppMore = $('ppMore');
+  if (ppMore) ppMore.onclick = (e) => {
+    if (!viewingUser) return;
+    showMenu(e, [
+      { icon: '📋', label: 'کپی آیدی', action: () => {
+        navigator.clipboard.writeText(viewingUser.public_id || '@' + viewingUser.username)
+          .then(() => showToast('آیدی کپی شد', 'success'));
+      }},
+      { icon: '🚫', label: 'بلاک کردن', action: () => showToast('به‌زودی', 'info'), danger: true }
+    ]);
+  };
+
+  // کلیک روی avatar در هدر چت
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#chatAvatar') && currentOtherUser) {
+      openUserProfile(currentOtherUser);
+    }
+  });
+}
+
+async function openUserProfile(user) {
+  viewingUser = user;
+
+  // اطمینان از بارگذاری کامل
+  const { data: fullUser } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+
+  const u = fullUser || user;
+
+  // آواتار
+  const av = $('publicAvatar');
+  av.innerHTML = u.avatar_url
+    ? '<img src="' + u.avatar_url + '" alt="">'
+    : getInitials(u.display_name || u.username);
+
+  // نام
+  $('publicName').textContent = u.display_name || u.username || '-';
+
+  // آیدی
+  $('publicId').textContent = u.public_id || '@' + (u.username || 'user');
+
+  // بیو
+  const bio = $('publicBio');
+  if (u.bio && u.bio.trim()) {
+    bio.textContent = u.bio;
+    bio.style.display = 'block';
+  } else {
+    bio.style.display = 'none';
+  }
+
+  // شماره
+  $('publicPhone').textContent = u.phone || 'مخفی';
+
+  // وضعیت
+  if (u.is_online) {
+    $('publicStatus').textContent = 'آنلاین';
+  } else if (u.last_seen) {
+    const diff = (Date.now() - new Date(u.last_seen)) / 1000;
+    if (diff < 60) $('publicStatus').textContent = 'لحظاتی پیش';
+    else if (diff < 3600) $('publicStatus').textContent = Math.floor(diff/60) + ' دقیقه پیش';
+    else if (diff < 86400) $('publicStatus').textContent = Math.floor(diff/3600) + ' ساعت پیش';
+    else $('publicStatus').textContent = formatTime(u.last_seen);
+  } else {
+    $('publicStatus').textContent = 'آفلاین';
+  }
+
+  $('userProfileModal').style.display = 'flex';
+}
+
+// باز کردن پروفایل خودت با دکمه بازنویسی در settings
 
 // ═══════════════════ MISC ═══════════════════
 async function markAsRead() {
@@ -2916,6 +3191,7 @@ function bindMenusHard() {
           { icon: '👤', label: 'پروفایل من', action: openProfileModal },
           { icon: '🌙', label: 'حالت تاریک/روشن', action: toggleTheme },
       { icon: '🎨', label: 'رنگ تم', action: () => { $('themeModal').style.display = 'flex'; } },
+      { icon: '⚙️', label: 'تنظیمات', action: () => { $('settingsModal').style.display = 'flex'; } },
           { icon: '🔍', label: 'جستجوی همه‌جانبه', action: openGlobalSearch },
           { icon: '🚪', label: 'خروج', action: doLogout, danger: true }
         ]

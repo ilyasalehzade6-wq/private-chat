@@ -30,6 +30,7 @@
       <button class="icon-btn" id="newChatBtn" title="چت جدید">✏️</button>
       <button class="icon-btn" id="newGroupBtn" title="گروه جدید">👥</button>
       <button class="icon-btn" id="themeBtn" title="تم">🌙</button>
+      <button class="icon-btn" id="settingsBtn" title="تنظیمات">⚙️</button>
       <button class="icon-btn" id="menuBtn" title="منو">⋮</button>
     </div>
 
@@ -230,6 +231,144 @@
 <div class="context-menu" id="contextMenu" style="display:none"></div>
 
 <!-- ═══════════ PROFILE MODAL ═══════════ -->
+<div class="modal-bg" id="userProfileModal" style="display:none">
+  <div class="modal profile-public">
+    <div class="profile-public-cover"></div>
+    <button class="modal-close-x" id="userProfileClose">✕</button>
+    <div class="profile-public-body">
+      <div class="profile-public-avatar" id="publicAvatar">👤</div>
+      <div class="profile-public-name" id="publicName">-</div>
+      <div class="profile-public-id" id="publicId">@-</div>
+      <div class="profile-public-bio" id="publicBio" style="display:none"></div>
+
+      <div class="profile-public-actions">
+        <button class="pp-action" id="ppMessage">
+          <span>💬</span>
+          <span>پیام</span>
+        </button>
+        <button class="pp-action" id="ppCall">
+          <span>📞</span>
+          <span>تماس</span>
+        </button>
+        <button class="pp-action" id="ppMore">
+          <span>⋮</span>
+          <span>بیشتر</span>
+        </button>
+      </div>
+
+      <div class="profile-public-info">
+        <div class="pp-info-item">
+          <span class="pp-info-icon">📱</span>
+          <div>
+            <div class="pp-info-label">شماره</div>
+            <div class="pp-info-value" id="publicPhone">-</div>
+          </div>
+        </div>
+        <div class="pp-info-item">
+          <span class="pp-info-icon">🟢</span>
+          <div>
+            <div class="pp-info-label">وضعیت</div>
+            <div class="pp-info-value" id="publicStatus">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="settingsModal" style="display:none">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>⚙️ تنظیمات</h3>
+      <button id="settingsClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="settings-list">
+        <div class="setting-item">
+          <div class="setting-icon" style="background:linear-gradient(135deg,#FF6B9D,#C44569)">👤</div>
+          <div class="setting-body">
+            <div class="setting-title">پروفایل من</div>
+            <div class="setting-desc">نام، عکس، بیو</div>
+          </div>
+          <div class="setting-arrow">←</div>
+        </div>
+        <div class="setting-item" id="openThemeFromSettings">
+          <div class="setting-icon" style="background:linear-gradient(135deg,#7B4FE0,#9E7AFF)">🎨</div>
+          <div class="setting-body">
+            <div class="setting-title">رنگ تم</div>
+            <div class="setting-desc">تغییر رنگ برنامه</div>
+          </div>
+          <div class="setting-arrow">←</div>
+        </div>
+        <div class="setting-item" id="toggleDarkTheme">
+          <div class="setting-icon" style="background:linear-gradient(135deg,#3F51B5,#303F9F)">🌙</div>
+          <div class="setting-body">
+            <div class="setting-title">حالت تاریک</div>
+            <div class="setting-desc">تغییر روشنایی برنامه</div>
+          </div>
+          <div class="setting-switch" id="darkThemeSwitch"></div>
+        </div>
+        <div class="setting-divider"></div>
+        <div class="setting-item">
+          <div class="setting-icon" style="background:linear-gradient(135deg,#00BCD4,#0097A7)">🔔</div>
+          <div class="setting-body">
+            <div class="setting-title">اعلان‌ها</div>
+            <div class="setting-desc">دریافت اعلان پیام‌های جدید</div>
+          </div>
+          <div class="setting-switch" id="notifSwitch"></div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-icon" style="background:linear-gradient(135deg,#FFC107,#FFA000)">🔊</div>
+          <div class="setting-body">
+            <div class="setting-title">صدای اعلان</div>
+            <div class="setting-desc">پخش صدا هنگام دریافت پیام</div>
+          </div>
+          <div class="setting-switch" id="soundSwitch"></div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-icon" style="background:linear-gradient(135deg,#F44336,#D32F2F)">✓✓</div>
+          <div class="setting-body">
+            <div class="setting-title">تیک خوانده‌شدن</div>
+            <div class="setting-desc">نمایش تیک آبی برای پیام‌های خوانده‌شده</div>
+          </div>
+          <div class="setting-switch" id="readReceiptsSwitch"></div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-icon" style="background:linear-gradient(135deg,#00BFA5,#00897B)">👁️</div>
+          <div class="setting-body">
+            <div class="setting-title">آخرین بازدید</div>
+            <div class="setting-desc">نمایش آخرین بازدید به دیگران</div>
+          </div>
+          <div class="setting-switch" id="lastSeenSwitch"></div>
+        </div>
+        <div class="setting-divider"></div>
+        <div class="setting-item" id="clearCacheBtn">
+          <div class="setting-icon" style="background:linear-gradient(135deg,#9E9E9E,#757575)">🗑️</div>
+          <div class="setting-body">
+            <div class="setting-title">پاک کردن cache</div>
+            <div class="setting-desc">حذف داده‌های موقت برنامه</div>
+          </div>
+          <div class="setting-arrow">←</div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-icon" style="background:linear-gradient(135deg,#2196F3,#1976D2)">ℹ️</div>
+          <div class="setting-body">
+            <div class="setting-title">درباره</div>
+            <div class="setting-desc">نسخه 1.0.0</div>
+          </div>
+        </div>
+        <div class="setting-divider"></div>
+        <div class="setting-item danger" id="logoutFromSettings">
+          <div class="setting-icon" style="background:linear-gradient(135deg,#F44336,#D32F2F)">🚪</div>
+          <div class="setting-body">
+            <div class="setting-title">خروج از حساب</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="themeModal" style="display:none">
   <div class="modal">
     <div class="modal-head">
