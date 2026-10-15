@@ -1580,3 +1580,226 @@ body.dark .chat-area {
   opacity: .6;
   cursor: not-allowed;
 }
+
+/* ═══════════════════════════════════════════
+   🎨 قابلیت‌های اضافی روبیکا
+   ═══════════════════════════════════════════ */
+
+/* ─── FAB (دکمه شناور پیام جدید) ─── */
+.fab-new-chat {
+  position: fixed;
+  bottom: 30px;
+  left: 30px;
+  width: 60px;
+  height: 60px;
+  border-radius: 20px;
+  border: none;
+  background: var(--gradient);
+  color: #fff;
+  font-size: 26px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 30px -8px rgba(123, 79, 224, 0.55);
+  transition: all .25s cubic-bezier(.34,1.56,.64,1);
+  z-index: 100;
+  display: none;
+}
+
+.fab-new-chat.show {
+  display: flex;
+}
+
+.fab-new-chat:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 18px 40px -8px rgba(123, 79, 224, 0.65);
+}
+
+.fab-new-chat:active {
+  transform: scale(.95);
+}
+
+/* ─── نوار تاریخ (Date Separator) ─── */
+.date-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 16px 0 8px;
+  position: relative;
+}
+
+.date-separator span {
+  padding: 5px 14px;
+  background: rgba(123, 79, 224, 0.1);
+  color: var(--primary);
+  font-size: 11.5px;
+  font-weight: 700;
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(123, 79, 224, 0.15);
+  z-index: 1;
+}
+
+body.dark .date-separator span {
+  background: rgba(123, 79, 224, 0.2);
+  border-color: rgba(123, 79, 224, 0.3);
+  color: var(--primary-light);
+}
+
+/* ─── تب‌بار موبایل پایین ─── */
+.mobile-tabbar {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  z-index: 200;
+  box-shadow: 0 -4px 20px rgba(31, 44, 61, 0.08);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.mobile-tabbar button {
+  flex: 1;
+  padding: 10px 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transition: color .2s;
+  position: relative;
+}
+
+.mobile-tabbar button .icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.mobile-tabbar button .label {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mobile-tabbar button.active {
+  color: var(--primary);
+}
+
+.mobile-tabbar button.active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 30%;
+  right: 30%;
+  height: 3px;
+  background: var(--gradient);
+  border-radius: 0 0 4px 4px;
+}
+
+/* ─── تب‌بار سایدبار: فیلتر فعال ─── */
+.rubika-tabs button {
+  position: relative;
+}
+
+/* ─── حالت جستجو در سایدبار (نمایش نتایج) ─── */
+.user-item.hidden-filter {
+  display: none;
+}
+
+/* ─── Empty filter state ─── */
+.filter-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  line-height: 1.8;
+}
+
+.filter-empty .emoji {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 12px;
+  opacity: .4;
+}
+
+/* ─── Online/offline در هدر چت ─── */
+.chat-header .info p.online::before {
+  content: "●";
+  color: var(--online);
+  margin-left: 5px;
+  font-size: 8px;
+  vertical-align: middle;
+}
+
+/* ─── انیمیشن برای کاربر فعال در لیست ─── */
+.user-item.active .avatar {
+  box-shadow: 0 0 0 3px rgba(123, 79, 224, 0.25);
+}
+
+/* ─── Unread-only badge در تب فیلتر ─── */
+.rubika-tabs button .tab-badge {
+  position: absolute;
+  top: 6px;
+  right: calc(50% - 22px);
+  background: var(--danger);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 800;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* ─── موبایل ─── */
+@media (max-width: 768px) {
+  .mobile-tabbar {
+    display: flex;
+  }
+
+  .chat-app {
+    padding-bottom: 62px;
+  }
+
+  .fab-new-chat {
+    bottom: 80px;
+    left: 20px;
+    width: 54px;
+    height: 54px;
+    font-size: 22px;
+  }
+
+  /* وقتی داخل چت هستیم، tabbar را مخفی کن */
+  body.in-chat .mobile-tabbar {
+    display: none;
+  }
+
+  body.in-chat .chat-app {
+    padding-bottom: 0;
+  }
+
+  body.in-chat .fab-new-chat {
+    display: none !important;
+  }
+
+  /* تب‌بار بالای سایدبار در موبایل کمی جمع‌تر */
+  .rubika-tabs {
+    padding: 0 8px;
+  }
+
+  .rubika-tabs button {
+    font-size: 12px;
+    padding: 10px 6px;
+  }
+}

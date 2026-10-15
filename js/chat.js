@@ -19,6 +19,7 @@ let editingId = null;
 let allMessages = [];
 let reactionsMap = {};
 let pinnedMsg = null;
+let currentFilter = 'all';  // all | unread | online
 let unreadCounts = {};       // { userId: count }
 let lastNotifications = {};  // جلوگیری از spam
 let notificationGranted = false;
@@ -67,7 +68,7 @@ async function init() {
     localStorage.setItem('chat_theme', isDark ? 'dark' : 'light');
   };
 
-  $('backBtn').onclick = () => $('sidebar').classList.remove('hidden');
+  $('backBtn').onclick = () => { $('sidebar').classList.remove('hidden'); setInChat(false); };
 
   // Composer
   const input = $('messageInput');
@@ -160,6 +161,11 @@ async function init() {
   // حالت خودکار بر اساس ساعت
   applyAutoTheme();
 
+  // 🎨 setup‌های روبیکا
+  setupFilterTabs();
+  setupFAB();
+  setupMobileTabbar();
+
   // Global click to close reaction pickers
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.reaction-picker') && !e.target.closest('.msg-action-react')) {
@@ -188,9 +194,13 @@ async function loadUsers() {
 function renderUsers(filter = '') {
   const list = $('userList');
   const q = filter.trim().toLowerCase();
+  let baseList = allUsers;
+  // اعمال فیلتر تب
+  baseList = applyFilter(baseList);
+  // اعمال فیلتر جستجو
   const filtered = q
-    ? allUsers.filter(u => (u.username || '').toLowerCase().includes(q) || (u.display_name || '').toLowerCase().includes(q))
-    : allUsers;
+    ? baseList.filter(u => (u.username || '').toLowerCase().includes(q) || (u.display_name || '').toLowerCase().includes(q))
+    : baseList;
 
   if (!filtered.length) {
     list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">' + (q ? 'کاربری پیدا نشد' : 'هنوز کاربر دیگری ثبت‌نام نکرده') + '</div>';
@@ -215,6 +225,16 @@ function renderUsers(filter = '') {
   list.querySelectorAll('.user-item').forEach(el => {
     el.onclick = () => selectUser(el.dataset.id);
   });
+
+  // FAB را نشان بده اگر کاربران موجود هستند و در حالت چت نیستیم
+  const fab = $('fabNewChat');
+  if (fab) {
+    if (allUsers.length > 0 && !document.body.classList.contains('in-chat')) {
+      fab.classList.add('show');
+    } else {
+      fab.classList.remove('show');
+    }
+  }
 }
 
 function subscribeProfiles() {
@@ -258,6 +278,7 @@ async function selectUser(otherId) {
   $('chatHeader').style.display = 'flex';
   $('composer').style.display = 'flex';
   $('sidebar').classList.add('hidden');
+  setInChat(true);
   renderUsers();
 
   await loadMessages();
@@ -302,7 +323,16 @@ function renderAllMessages() {
     area.innerHTML = '<div class="empty-chat" style="flex:1"><div class="big-icon">✨</div><p>اولین پیام را بفرست!</p></div>';
     return;
   }
-  allMessages.forEach(m => renderMessage(m));
+  allMessages.forEach((m, i) => {
+    const prev = i > 0 ? allMessages[i - 1] : null;
+    if (shouldShowDate(m, prev)) {
+      const sep = document.createElement('div');
+      sep.className = 'date-separator';
+      sep.innerHTML = '<span>' + formatDateSeparator(m.created_at) + '</span>';
+      area.appendChild(sep);
+    }
+    renderMessage(m);
+  });
 }
 
 function getMessageById(id) {
@@ -928,6 +958,7 @@ async function loadUnreadCounts() {
       }
     });
     unreadCounts = counts;
+    updateFilterBadge();
   } catch (e) {}
 }
 
@@ -1000,5 +1031,136 @@ async function saveProfile() {
 // ═══════════════════════════════════════════
 // هوک‌ها: اتصال به بخش‌های قبلی
 // ═══════════════════════════════════════════
+
+
+
+// ═══════════════════════════════════════════
+// 🎨 فیلتر تب‌بار سایدبار
+// ═══════════════════════════════════════════
+function setupFilterTabs() {
+  document.querySelectorAll('.rubika-tabs button').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.rubika-tabs button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.tab;
+      renderUsers($('searchInput').value);
+    };
+  });
+}
+
+function applyFilter(users) {
+  if (currentFilter === 'online') {
+    return users.filter(u => u.is_online);
+  }
+  if (currentFilter === 'unread') {
+    return users.filter(u => (unreadCounts[u.id] || 0) > 0);
+  }
+  return users;
+}
+
+function updateFilterBadge() {
+  const unreadBtn = document.querySelector('.rubika-tabs button[data-tab="unread"]');
+  if (!unreadBtn) return;
+  const total = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
+  let badge = unreadBtn.querySelector('.tab-badge');
+  if (total > 0) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'tab-badge';
+      unreadBtn.appendChild(badge);
+    }
+    badge.textContent = total > 99 ? '99+' : total;
+  } else if (badge) {
+    badge.remove();
+  }
+}
+
+// ═══════════════════════════════════════════
+// 🎨 نوار تاریخ بین پیام‌ها
+// ═══════════════════════════════════════════
+function shouldShowDate(currentMsg, prevMsg) {
+  if (!prevMsg) return true;
+  const d1 = new Date(currentMsg.created_at);
+  const d2 = new Date(prevMsg.created_at);
+  return d1.toDateString() !== d2.toDateString();
+}
+
+function formatDateSeparator(dateStr) {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+  if (msgDay.getTime() === today.getTime()) return 'امروز';
+  if (msgDay.getTime() === yesterday.getTime()) return 'دیروز';
+
+  // محاسبه اختلاف روزها
+  const diffDays = Math.floor((today - msgDay) / (1000 * 60 * 60 * 24));
+  if (diffDays < 7) {
+    const days = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
+    return days[d.getDay()];
+  }
+
+  const months = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
+                  'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+  // تبدیل میلادی به شمسی (تقریبی - از Intl استفاده می‌کنیم)
+  try {
+    return new Intl.DateTimeFormat('fa-IR', {
+      year: 'numeric', month: 'long', day: 'numeric'
+    }).format(d);
+  } catch (e) {
+    return d.toLocaleDateString('fa-IR');
+  }
+}
+
+// ═══════════════════════════════════════════
+// 🎨 FAB (دکمه شناور)
+// ═══════════════════════════════════════════
+function setupFAB() {
+  const fab = $('fabNewChat');
+  if (!fab) return;
+  fab.onclick = () => {
+    // اسکرول به لیست کاربران
+    $('sidebar').classList.remove('hidden');
+    setTimeout(() => {
+      const firstUser = document.querySelector('.user-item');
+      if (firstUser) firstUser.click();
+    }, 200);
+  };
+}
+
+// ═══════════════════════════════════════════
+// 🎨 تب‌بار موبایل
+// ═══════════════════════════════════════════
+function setupMobileTabbar() {
+  const tabbar = $('mobileTabbar');
+  if (!tabbar) return;
+
+  tabbar.querySelectorAll('button').forEach(btn => {
+    btn.onclick = () => {
+      tabbar.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.tab;
+
+      if (tab === 'chats' || tab === 'contacts') {
+        $('sidebar').classList.remove('hidden');
+        document.body.classList.remove('in-chat');
+      } else if (tab === 'profile') {
+        openProfileModal();
+      }
+    };
+  });
+}
+
+// ─── تغییر وضعیت in-chat ───
+function setInChat(inChat) {
+  if (inChat) {
+    document.body.classList.add('in-chat');
+  } else {
+    document.body.classList.remove('in-chat');
+  }
+}
 
 init();

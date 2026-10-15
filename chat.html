@@ -141,6 +141,23 @@
   <img id="lightboxImg" src="" alt="">
 </div>
 
+<button class="fab-new-chat" id="fabNewChat" title="چت جدید">✏️</button>
+
+<nav class="mobile-tabbar" id="mobileTabbar">
+  <button data-tab="chats" class="active">
+    <span class="icon">💬</span>
+    <span class="label">چت‌ها</span>
+  </button>
+  <button data-tab="contacts">
+    <span class="icon">👥</span>
+    <span class="label">مخاطبین</span>
+  </button>
+  <button data-tab="profile">
+    <span class="icon">👤</span>
+    <span class="label">من</span>
+  </button>
+</nav>
+
 <div class="toast" id="toast"></div>
 <script type="module" src="./js/chat.js">// ثبت Service Worker
 if ('serviceWorker' in navigator) {
