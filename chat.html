@@ -2,164 +2,263 @@
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>چت — پیام‌رسان خصوصی</title>
-<link rel="manifest" href="./manifest.json">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#7B4FE0">
+<title>پیام‌رسان</title>
 <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+<link rel="manifest" href="./manifest.json">
 <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
+
 <div class="chat-app">
+
+  <!-- ═══════════ SIDEBAR ═══════════ -->
   <aside class="sidebar" id="sidebar">
+
+    <!-- Header -->
     <div class="sidebar-header">
-      <div class="logo">💬</div>
+      <div class="sidebar-avatar" id="myAvatarBtn">
+        <div class="avatar" id="myAvatar">👤</div>
+      </div>
       <div class="info">
         <h3 id="myName">...</h3>
         <p id="myStatus">آنلاین</p>
       </div>
-      <button class="icon-btn" id="profileBtn" title="پروفایل">👤</button>
-      <button class="icon-btn" id="themeBtn" title="تغییر تم">🌙</button>
-      <button class="icon-btn" id="logoutBtn" title="خروج">🚪</button>
+      <button class="icon-btn" id="newChatBtn" title="چت جدید">✏️</button>
+      <button class="icon-btn" id="themeBtn" title="تم">🌙</button>
+      <button class="icon-btn" id="menuBtn" title="منو">⋮</button>
     </div>
-    <div class="rubika-tabs">
+
+    <!-- Tabs -->
+    <div class="tabs" id="chatTabs">
       <button class="active" data-tab="all">همه</button>
-      <button data-tab="unread">خوانده‌نشده</button>
+      <button data-tab="unread">خوانده‌نشده <span class="tab-badge" id="unreadTabBadge" style="display:none">0</span></button>
       <button data-tab="online">آنلاین</button>
     </div>
 
+    <!-- Search -->
     <div class="search-box">
-      <input type="text" id="searchInput" placeholder="جستجوی کاربر...">
+      <input type="text" id="searchInput" placeholder="جستجو...">
     </div>
-    <div class="user-list" id="userList">
-      <div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">
-        در حال بارگذاری کاربران...
+
+    <!-- Chat list -->
+    <div class="chat-list" id="chatList">
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>در حال بارگذاری...</p>
       </div>
     </div>
+
+    <!-- FAB -->
+    <button class="fab" id="fab" title="چت جدید">✏️</button>
   </aside>
 
-  <main class="chat-area">
-    <div class="chat-header" id="chatHeader" style="display:none">
-      <button class="icon-btn back-btn" id="backBtn">←</button>
-      <div class="avatar" id="chatAvatar"></div>
-      <div class="info">
-        <h3 id="chatName"></h3>
-        <p id="chatStatus"></p>
+  <!-- ═══════════ CHAT AREA ═══════════ -->
+  <main class="chat-area" id="chatArea">
+
+    <!-- Empty state -->
+    <div class="chat-empty" id="chatEmpty">
+      <div class="empty-art">💬</div>
+      <h2>به پیام‌رسان خوش آمدی</h2>
+      <p>یک گفتگو از لیست انتخاب کن یا یک چت جدید شروع کن</p>
+    </div>
+
+    <!-- Active chat -->
+    <div class="chat-active" id="chatActive" style="display:none">
+
+      <!-- Header -->
+      <div class="chat-header">
+        <button class="icon-btn back-btn" id="backBtn">←</button>
+        <div class="avatar" id="chatAvatar"></div>
+        <div class="info" id="chatInfoBtn">
+          <h3 id="chatName"></h3>
+          <p id="chatStatus"></p>
+        </div>
+        <button class="icon-btn" id="callVoiceBtn" title="تماس صوتی">📞</button>
+        <button class="icon-btn" id="callVideoBtn" title="تماس تصویری">📹</button>
+        <button class="icon-btn" id="chatMenuBtn" title="منو">⋮</button>
       </div>
-      <button class="icon-btn" id="searchToggle" title="جستجو">🔍</button>
-      <button class="icon-btn" id="pinToggle" title="پیام‌های پین‌شده">📌</button>
-    </div>
 
-    <div class="chat-search-bar" id="chatSearchBar" style="display:none">
-      <input type="text" id="chatSearchInput" placeholder="جستجو در پیام‌ها...">
-      <span class="search-count" id="searchCount"></span>
-      <button class="icon-btn-sm" id="chatSearchClose">✕</button>
-    </div>
-
-    <div class="pinned-banner" id="pinnedBanner" style="display:none">
-      <div class="pin-icon">📌</div>
-      <div class="pin-body">
-        <div class="pin-label">پیام پین‌شده</div>
-        <div class="pin-text" id="pinnedText"></div>
+      <!-- Pinned banner -->
+      <div class="pinned-banner" id="pinnedBanner" style="display:none">
+        <div class="pin-bar"></div>
+        <div class="pin-body" id="pinBody">
+          <div class="pin-label">📌 پیام پین‌شده</div>
+          <div class="pin-text" id="pinnedText"></div>
+        </div>
+        <button class="pin-close" id="pinClose">✕</button>
       </div>
-      <button class="pin-close" id="pinClose">✕</button>
-    </div>
 
-    <div class="messages-area" id="messagesArea">
-      <div class="empty-chat">
-        <div class="big-icon">💬</div>
-        <p>یک کاربر را از لیست انتخاب کن تا چت شروع شود</p>
+      <!-- Search bar -->
+      <div class="search-bar" id="searchBar" style="display:none">
+        <button class="icon-btn-sm" id="searchClose">✕</button>
+        <input type="text" id="searchInputChat" placeholder="جستجو در این گفتگو...">
+        <span class="search-count" id="searchCount"></span>
+        <button class="icon-btn-sm" id="searchPrev">↑</button>
+        <button class="icon-btn-sm" id="searchNext">↓</button>
       </div>
-    </div>
 
-    <div class="typing-indicator" id="typingIndicator"></div>
-
-    <div class="reply-preview" id="replyPreview" style="display:none">
-      <div class="reply-inner">
-        <div class="reply-label">↩ پاسخ به <span id="replyName"></span></div>
-        <div class="reply-text" id="replyText"></div>
+      <!-- Messages -->
+      <div class="messages-area" id="messagesArea">
+        <div class="empty-chat">
+          <div class="empty-art">✨</div>
+          <p>اولین پیام را بفرست!</p>
+        </div>
       </div>
-      <button class="reply-close" id="replyClose">✕</button>
-    </div>
 
-    <div class="edit-banner" id="editBanner" style="display:none">
-      <div class="edit-inner">
-        <div class="edit-label">✏️ ویرایش پیام</div>
-        <div class="edit-text" id="editText"></div>
+      <!-- Scroll to bottom -->
+      <button class="scroll-bottom" id="scrollBottom" style="display:none">↓</button>
+
+      <!-- Typing -->
+      <div class="typing-row" id="typingRow" style="display:none">
+        <div class="typing-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <span id="typingText">در حال نوشتن...</span>
       </div>
-      <button class="edit-close" id="editClose">✕</button>
-    </div>
 
-    <div class="attachment-preview" id="attachmentPreview" style="display:none">
-      <div class="attachment-preview-inner">
-        <div id="attachPreviewContent"></div>
-        <div class="attachment-info" id="attachInfo"></div>
+      <!-- Reply preview -->
+      <div class="reply-preview" id="replyPreview" style="display:none">
+        <div class="preview-bar"></div>
+        <div class="preview-body">
+          <div class="preview-label">↩️ پاسخ به <span id="replyName"></span></div>
+          <div class="preview-text" id="replyText"></div>
+        </div>
+        <button class="preview-close" id="replyClose">✕</button>
       </div>
-      <button class="attach-remove" id="attachRemove" title="حذف ضمیمه">✕</button>
-    </div>
 
-    <div class="composer" id="composer" style="display:none">
-      <input type="file" id="fileInput" style="display:none" accept="image/*,video/*,.pdf,.doc,.docx,.zip,.rar,.txt">
-      <button class="attach-btn" id="attachBtn" type="button" title="پیوست فایل">📎</button>
-      <textarea id="messageInput" placeholder="پیامت را بنویس..." rows="1"></textarea>
-      <button class="send-btn" id="sendBtn" disabled>📤</button>
+      <!-- Edit preview -->
+      <div class="reply-preview edit" id="editPreview" style="display:none">
+        <div class="preview-bar"></div>
+        <div class="preview-body">
+          <div class="preview-label">✏️ ویرایش پیام</div>
+          <div class="preview-text" id="editText"></div>
+        </div>
+        <button class="preview-close" id="editClose">✕</button>
+      </div>
+
+      <!-- Attachment preview -->
+      <div class="attach-preview" id="attachPreview" style="display:none">
+        <div class="attach-preview-body" id="attachPreviewBody"></div>
+        <div class="attach-info" id="attachInfo"></div>
+        <button class="preview-close" id="attachClose">✕</button>
+      </div>
+
+      <!-- Composer -->
+      <div class="composer" id="composer">
+        <button class="composer-btn" id="attachBtn" title="پیوست">📎</button>
+        <div class="input-wrap">
+          <textarea id="messageInput" placeholder="پیام..." rows="1"></textarea>
+        </div>
+        <button class="composer-btn" id="emojiBtn" title="ایموجی">😊</button>
+        <button class="composer-btn voice" id="voiceBtn" title="ضبط صدا" style="display:none">🎤</button>
+        <button class="send-btn" id="sendBtn" title="ارسال" disabled>
+          <span class="send-icon">➤</span>
+        </button>
+      </div>
+
+      <!-- Voice recording -->
+      <div class="voice-recording" id="voiceRecording" style="display:none">
+        <button class="voice-cancel" id="voiceCancel">✕</button>
+        <div class="voice-wave">
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="voice-time" id="voiceTime">00:00</div>
+        <button class="voice-send" id="voiceSend">➤</button>
+      </div>
+
     </div>
   </main>
 </div>
 
-<div class="modal-bg" id="profileModal">
-  <div class="modal">
-    <div class="modal-head">
-      <h3>👤 ویرایش پروفایل</h3>
-      <button id="profileClose">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="profile-avatar-edit">
-        <div class="avatar-preview-lg" id="avatarPreviewLg">👤</div>
-        <label class="btn-upload-avatar" for="avatarInput">
-          <input type="file" id="avatarInput" accept="image/*">
-          📷 تغییر عکس
-        </label>
-      </div>
-      <div class="form-group" style="margin-top:18px">
-        <label>نام نمایشی</label>
-        <input type="text" id="profileDisplayName" placeholder="نام کامل شما">
-      </div>
-      <div class="form-group">
-        <label>نام کاربری</label>
-        <input type="text" id="profileUsername" placeholder="username" disabled>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" id="profileCancelBtn">لغو</button>
-        <button class="btn-primary" id="profileSaveBtn">ذخیره تغییرات</button>
-      </div>
+<!-- ═══════════ BOTTOM SHEET (Attachment) ═══════════ -->
+<div class="sheet-bg" id="attachSheet" style="display:none">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-grid">
+      <button data-type="gallery">
+        <div class="sheet-icon" style="background: linear-gradient(135deg, #7B4FE0, #9E7AFF)">🖼️</div>
+        <span>گالری</span>
+      </button>
+      <button data-type="camera">
+        <div class="sheet-icon" style="background: linear-gradient(135deg, #FF6B6B, #FF8E8E)">📷</div>
+        <span>دوربین</span>
+      </button>
+      <button data-type="file">
+        <div class="sheet-icon" style="background: linear-gradient(135deg, #4ECDC4, #44A08D)">📄</div>
+        <span>فایل</span>
+      </button>
+      <button data-type="video">
+        <div class="sheet-icon" style="background: linear-gradient(135deg, #FFB84D, #FFA726)">🎥</div>
+        <span>ویدیو</span>
+      </button>
+      <button data-type="location">
+        <div class="sheet-icon" style="background: linear-gradient(135deg, #FF6B9D, #C44569)">📍</div>
+        <span>موقعیت</span>
+      </button>
+      <button data-type="contact">
+        <div class="sheet-icon" style="background: linear-gradient(135deg, #667EEA, #764BA2)">👤</div>
+        <span>مخاطب</span>
+      </button>
     </div>
   </div>
 </div>
 
+<!-- ═══════════ EMOJI PICKER ═══════════ -->
+<div class="emoji-picker" id="emojiPicker" style="display:none">
+  <div class="emoji-tabs" id="emojiTabs"></div>
+  <div class="emoji-grid" id="emojiGrid"></div>
+</div>
+
+<!-- ═══════════ CONTEXT MENU ═══════════ -->
+<div class="context-menu" id="contextMenu" style="display:none"></div>
+
+<!-- ═══════════ PROFILE MODAL ═══════════ -->
+<div class="modal-bg" id="profileModal" style="display:none">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>پروفایل من</h3>
+      <button id="profileClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="profile-avatar-wrap">
+        <div class="avatar-preview" id="avatarPreview">👤</div>
+        <label class="btn-upload">
+          <input type="file" id="avatarInput" accept="image/*">
+          📷 تغییر عکس
+        </label>
+      </div>
+      <div class="form-group">
+        <label>نام نمایشی</label>
+        <input type="text" id="profileDisplayName" placeholder="نام شما">
+      </div>
+      <div class="form-group">
+        <label>نام کاربری</label>
+        <input type="text" id="profileUsername" disabled>
+      </div>
+      <button class="btn-primary" id="profileSave">ذخیره تغییرات</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ LIGHTBOX ═══════════ -->
 <div class="lightbox" id="lightbox">
   <button class="lightbox-close" id="lightboxClose">✕</button>
   <img id="lightboxImg" src="" alt="">
 </div>
 
-<button class="fab-new-chat" id="fabNewChat" title="چت جدید">✏️</button>
-
-<nav class="mobile-tabbar" id="mobileTabbar">
-  <button data-tab="chats" class="active">
-    <span class="icon">💬</span>
-    <span class="label">چت‌ها</span>
-  </button>
-  <button data-tab="contacts">
-    <span class="icon">👥</span>
-    <span class="label">مخاطبین</span>
-  </button>
-  <button data-tab="profile">
-    <span class="icon">👤</span>
-    <span class="label">من</span>
-  </button>
-</nav>
-
+<!-- ═══════════ TOAST ═══════════ -->
 <div class="toast" id="toast"></div>
-<script type="module" src="./js/chat.js">// ثبت Service Worker
+
+<!-- Hidden file inputs -->
+<input type="file" id="fileInput" accept="image/*,video/*,.pdf,.doc,.docx,.zip,.rar,.txt,.mp3,.mp4" style="display:none">
+<input type="file" id="galleryInput" accept="image/*,video/*" style="display:none" multiple>
+<input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+
+<script type="module" src="./js/chat.js"></script>
+<script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => {});

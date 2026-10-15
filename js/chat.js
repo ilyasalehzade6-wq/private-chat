@@ -1,37 +1,54 @@
-// js/chat.js
+// js/chat.js — بازطراحی کامل شبیه روبیکا
 import { supabase } from './supabase-client.js';
 import { requireAuth, signOut, getProfile } from './auth.js';
 import { showToast, formatTime, escapeHtml, getInitials, avatarColor } from './ui.js';
 import { compressFile, formatSize as fmtSize } from './compressor.js';
 
+// ═══════════════════ STATE ═══════════════════
 let currentUser = null;
 let currentProfile = null;
 let allUsers = [];
-let currentConversation = null;
+let chatList = [];            // [{otherUser, conversation, lastMessage, lastTime, unread}]
 let currentOtherUser = null;
-let messagesChannel = null;
-let reactionsChannel = null;
-let typingChannel = null;
-let typingTimer = null;
+let currentConversation = null;
+let currentFilter = 'all';
+let allMessages = [];
+let reactionsMap = {};
 let pendingAttachment = null;
 let replyTo = null;
 let editingId = null;
-let allMessages = [];
-let reactionsMap = {};
 let pinnedMsg = null;
-let currentFilter = 'all';  // all | unread | online
-let unreadCounts = {};       // { userId: count }
-let lastNotifications = {};  // جلوگیری از spam
+let typingTimer = null;
+let typingChannel = null;
+let messagesChannel = null;
+let reactionsChannel = null;
 let notificationGranted = false;
 let audioCtx = null;
+let searchResults = [];
+let searchIndex = 0;
+
+// Voice recording
+let mediaRecorder = null;
+let audioChunks = [];
+let voiceTimer = null;
+let voiceSeconds = 0;
+let voiceStream = null;
 
 const $ = (id) => document.getElementById(id);
 const BUCKET = 'chat-attachments';
-const EMOJIS = ['❤️', '😂', '👍', '😮', '😢', '🔥'];
 
-// ═══════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════
+const EMOJI_CATEGORIES = {
+  '😊': ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','🥲','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','😵','🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠'],
+  '❤️': ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','♥️','💋','💌','👨‍❤️‍👨','👩‍❤️‍👩','💑','💏'],
+  '👍': ['👍','👎','👌','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','👇','☝️','✋','🤚','🖐️','🖖','👋','🤝','🙏','✊','👊','🤛','🤜','👏','🙌','👐','🤲','💪','🦾'],
+  '🎉': ['🎉','🎊','🎈','🎁','🎀','🎂','🍰','🧁','🍾','🥂','🍻','🥳','✨','⭐','🌟','💫','⚡','🔥','💥','🎆','🎇'],
+  '🍔': ['🍔','🍕','🍟','🌭','🥪','🌮','🌯','🥙','🧆','🥚','🍳','🥘','🍲','🥣','🥗','🍿','🧈','🧂','🥫','🍱','🍘','🍙','🍚','🍛','🍜','🍝','🍠','🍢','🍣','🍤','🍥','🥮','🍡','🥟','🥠','🥡'],
+  '⚽': ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🏒','🏑','🥍','🏏','🪃','🥅','⛳','🪁','🏹','🎣','🤿','🥊','🥋','🎽','🛹','🛼','🛷','⛸️','🥌','🎿','⛷️','🏂'],
+  '🚗': ['🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🦯','🦽','🦼','🛴','🚲','🛵','🏍️','🛺','🚨','🚔','🚍','🚘','🚖','🚡','🚠','🚟','🚃','🚋','🚞','🚝','🚄','🚅','🚈','🚂','🚆','🚇','🚊','🚉','✈️','🛫','🛬','🛩️','💺','🛰️','🚀','🛸'],
+  '💡': ['💡','🔦','🕯️','🪔','🧯','🛢️','💸','💵','💴','💶','💷','💰','💳','💎','⚖️','🪜','🧰','🪛','🔧','🔨','⚒️','🛠️','⛏️','🪚','🔩','⚙️','🪤','🧱','⛓️','🧲','🔫','💣','🧨','🪓','🔪','🗡️','⚔️','🛡️','🚬','⚰️','🪦','⚱️','🏺','🔮','📿','🧿']
+};
+
+// ═══════════════════ INIT ═══════════════════
 async function init() {
   currentUser = await requireAuth();
   if (!currentUser) return;
@@ -39,223 +56,317 @@ async function init() {
   const { data: profile } = await getProfile(currentUser.id);
   currentProfile = profile;
   $('myName').textContent = profile?.display_name || profile?.username || 'من';
+  renderMyAvatar();
 
-  await supabase.from('profiles').update({ is_online: true }).eq('id', currentUser.id);
+  await supabase.from('profiles').update({ is_online: true, last_seen: new Date().toISOString() }).eq('id', currentUser.id);
+
+  // heartbeat آخرین بازدید
+  setInterval(() => {
+    if (document.visibilityState === 'visible') {
+      supabase.from('profiles').update({ last_seen: new Date().toISOString(), is_online: true }).eq('id', currentUser.id);
+    }
+  }, 30000);
+
   window.addEventListener('beforeunload', () => {
-    supabase.from('profiles').update({ is_online: false }).eq('id', currentUser.id);
+    supabase.from('profiles').update({ is_online: false, last_seen: new Date().toISOString() }).eq('id', currentUser.id);
   });
 
-  await loadUsers();
-  await loadUnreadCounts();
+  await loadAllUsers();
+  await loadChatList();
   subscribeProfiles();
+  subscribeAllMessages();
 
-  $('searchInput').addEventListener('input', (e) => renderUsers(e.target.value));
+  setupUI();
+  setupTheme();
+  setupTabs();
+  setupComposer();
+  setupEmoji();
+  setupSheets();
+  setupContextMenuClose();
+  setupProfileModal();
+  setupSearch();
+  setupVoice();
+  setupScrollBottom();
 
-  $('logoutBtn').onclick = async () => {
-    await supabase.from('profiles').update({ is_online: false }).eq('id', currentUser.id);
-    await signOut();
-    window.location.href = './index.html';
+  // اعلان
+  if ('Notification' in window && Notification.permission === 'granted') {
+    notificationGranted = true;
+  }
+}
+
+// ═══════════════════ UI BINDINGS ═══════════════════
+function setupUI() {
+  $('backBtn').onclick = () => {
+    $('sidebar').classList.remove('hidden');
+    document.body.classList.remove('in-chat');
   };
 
-  if (localStorage.getItem('chat_theme') === 'dark') {
+  $('myAvatarBtn').onclick = openProfileModal;
+  $('newChatBtn').onclick = () => {
+    $('sidebar').classList.remove('hidden');
+  };
+  $('fab').onclick = () => {
+    $('sidebar').classList.remove('hidden');
+    $('searchInput').focus();
+  };
+  $('menuBtn').onclick = (e) => {
+    showMenu(e, [
+      { icon: '👤', label: 'پروفایل من', action: openProfileModal },
+      { icon: '🌙', label: 'تغییر تم', action: toggleTheme },
+      { icon: '🚪', label: 'خروج', action: doLogout, danger: true }
+    ]);
+  };
+
+  $('chatInfoBtn').onclick = () => showToast('اطلاعات کاربر به‌زودی');
+  $('callVoiceBtn').onclick = () => showToast('تماس صوتی به‌زودی 🔜');
+  $('callVideoBtn').onclick = () => showToast('تماس تصویری به‌زودی 🔜');
+  $('chatMenuBtn').onclick = (e) => {
+    showMenu(e, [
+      { icon: '🔍', label: 'جستجو', action: () => toggleSearchBar(true) },
+      { icon: '📌', label: 'پیام‌های پین', action: () => pinnedMsg && scrollToMessage(pinnedMsg.id) },
+      { icon: '🗑', label: 'حذف گفتگو', action: () => showToast('به‌زودی'), danger: true }
+    ]);
+  };
+
+  $('logoutBtn')?.addEventListener('click', doLogout);
+}
+
+async function doLogout() {
+  if (!confirm('خارج می‌شوی؟')) return;
+  await supabase.from('profiles').update({ is_online: false, last_seen: new Date().toISOString() }).eq('id', currentUser.id);
+  await signOut();
+  window.location.href = './index.html';
+}
+
+function renderMyAvatar() {
+  const av = $('myAvatar');
+  if (currentProfile?.avatar_url) {
+    av.innerHTML = '<img src="' + currentProfile.avatar_url + '" alt="">';
+    av.style.background = 'transparent';
+  } else {
+    av.textContent = getInitials(currentProfile?.display_name || currentProfile?.username || '?');
+    av.style.background = 'var(--gradient)';
+  }
+}
+
+// ═══════════════════ THEME ═══════════════════
+function setupTheme() {
+  const saved = localStorage.getItem('chat_theme');
+  if (saved === 'dark') {
     document.body.classList.add('dark');
     $('themeBtn').textContent = '☀️';
+  } else if (!saved) {
+    const h = new Date().getHours();
+    if (h >= 19 || h < 7) {
+      document.body.classList.add('dark');
+      $('themeBtn').textContent = '☀️';
+    }
   }
-  $('themeBtn').onclick = () => {
-    document.body.classList.toggle('dark');
-    const isDark = document.body.classList.contains('dark');
-    $('themeBtn').textContent = isDark ? '☀️' : '🌙';
-    localStorage.setItem('chat_theme', isDark ? 'dark' : 'light');
-  };
+  $('themeBtn').onclick = toggleTheme;
+}
 
-  $('backBtn').onclick = () => { $('sidebar').classList.remove('hidden'); setInChat(false); };
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  $('themeBtn').textContent = isDark ? '☀️' : '🌙';
+  localStorage.setItem('chat_theme', isDark ? 'dark' : 'light');
+}
 
-  // Composer
-  const input = $('messageInput');
-  const sendBtn = $('sendBtn');
-
-  input.addEventListener('input', () => {
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 140) + 'px';
-    updateSendButton();
-    broadcastTyping();
-  });
-
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-    if (e.key === 'Escape' && editingId) {
-      cancelEdit();
-    }
-  });
-
-  sendBtn.onclick = sendMessage;
-
-  // Attachment
-  $('attachBtn').onclick = () => $('fileInput').click();
-  $('fileInput').onchange = (e) => {
-    const f = e.target.files[0];
-    if (f) handleFileSelect(f);
-    e.target.value = '';
-  };
-  $('attachRemove').onclick = clearAttachment;
-
-  // Reply close
-  $('replyClose').onclick = () => { replyTo = null; renderReplyPreview(); };
-
-  // Edit close
-  $('editClose').onclick = () => cancelEdit();
-
-  // Search
-  $('searchToggle').onclick = () => toggleSearch();
-  $('chatSearchClose').onclick = () => toggleSearch(false);
-  $('chatSearchInput').addEventListener('input', (e) => performSearch(e.target.value));
-
-  // Pin banner close
-  $('pinClose').onclick = () => { $('pinnedBanner').style.display = 'none'; };
-
-  // Drag & Drop
-  document.addEventListener('dragover', (e) => e.preventDefault());
-  document.addEventListener('drop', (e) => {
-    e.preventDefault();
-    if (e.dataTransfer.files[0] && currentConversation) {
-      handleFileSelect(e.dataTransfer.files[0]);
-    }
-  });
-
-  // Paste image
-  document.addEventListener('paste', (e) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (const it of items) {
-      if (it.type?.startsWith('image/')) {
-        const f = it.getAsFile();
-        if (f) handleFileSelect(f);
-        e.preventDefault();
-        return;
-      }
-    }
-  });
-
-  // Lightbox
-  $('lightboxClose').onclick = () => $('lightbox').classList.remove('show');
-  $('lightbox').onclick = (e) => { if (e.target.id === 'lightbox') $('lightbox').classList.remove('show'); };
-
-
-  // ─── دکمه‌های بسته ۲ ───
-  $('profileBtn').onclick = () => openProfileModal();
-  $('profileClose').onclick = () => $('profileModal').classList.remove('show');
-  $('profileCancelBtn').onclick = () => $('profileModal').classList.remove('show');
-  $('profileModal').onclick = (e) => { if (e.target.id === 'profileModal') $('profileModal').classList.remove('show'); };
-  $('profileSaveBtn').onclick = saveProfile;
-  $('avatarInput').onchange = (e) => {
-    const f = e.target.files[0];
-    if (f) uploadAvatarPreview(f);
-  };
-
-  // درخواست اعلان (بار اول)
-  initNotifications();
-
-  // حالت خودکار بر اساس ساعت
-  applyAutoTheme();
-
-  // 🎨 setup‌های روبیکا
-  setupFilterTabs();
-  setupFAB();
-  setupMobileTabbar();
-
-  // Global click to close reaction pickers
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.reaction-picker') && !e.target.closest('.msg-action-react')) {
-      document.querySelectorAll('.reaction-picker').forEach(p => p.remove());
-    }
+// ═══════════════════ TABS ═══════════════════
+function setupTabs() {
+  document.querySelectorAll('#chatTabs button').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('#chatTabs button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.tab;
+      renderChatList();
+    };
   });
 }
 
-function updateSendButton() {
-  const hasText = $('messageInput').value.trim().length > 0;
-  $('sendBtn').disabled = !hasText && !pendingAttachment && !editingId;
-}
-
-// ═══════════════════════════════════════════
-// USERS
-// ═══════════════════════════════════════════
-async function loadUsers() {
+// ═══════════════════ LOAD DATA ═══════════════════
+async function loadAllUsers() {
   const { data, error } = await supabase
-    .from('profiles').select('*').neq('id', currentUser.id)
-    .order('is_online', { ascending: false }).order('display_name');
-  if (error) { showToast('خطا: ' + error.message, 'error'); return; }
+    .from('profiles').select('*').neq('id', currentUser.id);
+  if (error) return;
   allUsers = data || [];
-  renderUsers();
 }
 
-function renderUsers(filter = '') {
-  const list = $('userList');
-  const q = filter.trim().toLowerCase();
-  let baseList = allUsers;
-  // اعمال فیلتر تب
-  baseList = applyFilter(baseList);
-  // اعمال فیلتر جستجو
-  const filtered = q
-    ? baseList.filter(u => (u.username || '').toLowerCase().includes(q) || (u.display_name || '').toLowerCase().includes(q))
-    : baseList;
+async function loadChatList() {
+  const list = $('chatList');
+  list.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>در حال بارگذاری...</p></div>';
 
-  if (!filtered.length) {
-    list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">' + (q ? 'کاربری پیدا نشد' : 'هنوز کاربر دیگری ثبت‌نام نکرده') + '</div>';
+  // واکشی همه مکالمات کاربر
+  const { data: convs, error } = await supabase
+    .from('conversations')
+    .select('*')
+    .or('user1_id.eq.' + currentUser.id + ',user2_id.eq.' + currentUser.id)
+    .order('last_message_at', { ascending: false, nullsFirst: false });
+
+  if (error) { list.innerHTML = '<div class="empty-list"><span class="emoji">⚠️</span>خطا در بارگذاری</div>'; return; }
+
+  // برای هر مکالمه، آخرین پیام و تعداد نخوانده
+  const items = [];
+  for (const conv of (convs || [])) {
+    const otherId = conv.user1_id === currentUser.id ? conv.user2_id : conv.user1_id;
+    const other = allUsers.find(u => u.id === otherId);
+    if (!other) continue;
+
+    // آخرین پیام
+    const { data: last } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', conv.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // تعداد نخوانده
+    const { count } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('conversation_id', conv.id)
+      .neq('sender_id', currentUser.id)
+      .is('read_at', null);
+
+    items.push({
+      otherUser: other,
+      conversation: conv,
+      lastMessage: last,
+      unread: count || 0
+    });
+  }
+
+  // کاربرانی که مکالمه ندارند را هم اضافه کن (برای شروع سریع)
+  for (const u of allUsers) {
+    if (!items.find(i => i.otherUser.id === u.id)) {
+      items.push({
+        otherUser: u,
+        conversation: null,
+        lastMessage: null,
+        unread: 0
+      });
+    }
+  }
+
+  // مرتب‌سازی: pin > last_time
+  items.sort((a, b) => {
+    const at = a.lastMessage?.created_at ? new Date(a.lastMessage.created_at) : 0;
+    const bt = b.lastMessage?.created_at ? new Date(b.lastMessage.created_at) : 0;
+    return bt - at;
+  });
+
+  chatList = items;
+  renderChatList();
+  updateUnreadTabBadge();
+}
+
+function renderChatList() {
+  const list = $('chatList');
+  const q = ($('searchInput').value || '').trim().toLowerCase();
+
+  let items = chatList.slice();
+
+  // فیلتر تب
+  if (currentFilter === 'unread') items = items.filter(i => i.unread > 0);
+  else if (currentFilter === 'online') items = items.filter(i => i.otherUser.is_online);
+
+  // فیلتر جستجو
+  if (q) {
+    items = items.filter(i => {
+      const n = (i.otherUser.display_name || i.otherUser.username || '').toLowerCase();
+      return n.includes(q);
+    });
+  }
+
+  if (!items.length) {
+    list.innerHTML = '<div class="empty-list"><span class="emoji">' + (q ? '🔍' : '💬') + '</span>' + (q ? 'چیزی پیدا نشد' : 'هنوز گفتگویی نداری') + '</div>';
     return;
   }
 
-  list.innerHTML = filtered.map(u => {
+  list.innerHTML = items.map(item => {
+    const u = item.otherUser;
     const name = u.display_name || u.username;
+    const initial = getInitials(name);
+    const color = avatarColor(u.id);
+    const avHtml = u.avatar_url
+      ? '<div class="avatar-img"><img src="' + u.avatar_url + '" alt=""></div>'
+      : initial;
+    const avStyle = u.avatar_url ? 'transparent' : color;
     const onlineDot = u.is_online ? '<span class="online-dot"></span>' : '';
+    const unreadBadge = item.unread > 0 ? '<span class="unread-badge">' + (item.unread > 99 ? '99+' : item.unread) + '</span>' : '';
     const active = currentOtherUser?.id === u.id ? 'active' : '';
-    const unread = unreadCounts[u.id] || 0;
-    const unreadBadge = unread > 0 ? '<span class="unread-badge">' + (unread > 99 ? '99+' : unread) + '</span>' : '';
-    const avatarContent = u.avatar_url
-      ? '<img src="' + u.avatar_url + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
-      : getInitials(name);
-    return '<div class="user-item ' + active + '" data-id="' + u.id + '">' +
-      '<div class="avatar" style="background:' + (u.avatar_url ? 'transparent' : avatarColor(u.id)) + '">' + avatarContent + onlineDot + unreadBadge + '</div>' +
-      '<div class="info"><h4>' + escapeHtml(name) + '</h4><p>' + (u.is_online ? 'آنلاین' : 'آفلاین') + '</p></div>' +
-      '</div>';
+
+    let preview = 'شروع گفتگو کن...';
+    let time = '';
+    let tick = '';
+
+    if (item.lastMessage) {
+      const m = item.lastMessage;
+      if (m.content) preview = m.content;
+      else if (m.attachment_type === 'image') preview = '📷 عکس';
+      else if (m.attachment_type === 'video') preview = '🎥 ویدیو';
+      else if (m.attachment_type === 'voice') preview = '🎤 پیام صوتی';
+      else preview = '📄 فایل';
+
+      preview = preview.substring(0, 60);
+      time = formatTime(m.created_at);
+
+      if (m.sender_id === currentUser.id) {
+        if (m.read_at) tick = '<span class="tick read">✓✓</span>';
+        else tick = '<span class="tick">✓✓</span>';
+      }
+    } else if (u.last_seen) {
+      time = formatTime(u.last_seen);
+    }
+
+    const previewClass = item.unread > 0 ? 'preview unread' : 'preview';
+
+    return '<div class="chat-item ' + active + '" data-id="' + u.id + '">' +
+      '<div class="avatar" style="background:' + avStyle + '">' + avHtml + onlineDot + unreadBadge + '</div>' +
+      '<div class="body">' +
+        '<div class="row1">' +
+          '<div class="name">' + escapeHtml(name) + '</div>' +
+          '<div class="meta">' +
+            (item.conversation?.pinned_at ? '<span class="pin-icon">📌</span>' : '') +
+            '<span>' + time + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="row2">' +
+          '<div class="' + previewClass + '">' + tick + escapeHtml(preview) + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
   }).join('');
 
-  list.querySelectorAll('.user-item').forEach(el => {
+  list.querySelectorAll('.chat-item').forEach(el => {
     el.onclick = () => selectUser(el.dataset.id);
   });
+}
 
-  // FAB را نشان بده اگر کاربران موجود هستند و در حالت چت نیستیم
-  const fab = $('fabNewChat');
-  if (fab) {
-    if (allUsers.length > 0 && !document.body.classList.contains('in-chat')) {
-      fab.classList.add('show');
-    } else {
-      fab.classList.remove('show');
-    }
+function updateUnreadTabBadge() {
+  const total = chatList.reduce((sum, i) => sum + (i.unread || 0), 0);
+  const badge = $('unreadTabBadge');
+  if (total > 0) {
+    badge.textContent = total > 99 ? '99+' : total;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
   }
 }
 
-function subscribeProfiles() {
-  supabase.channel('profiles-changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => loadUsers())
-    .subscribe();
-}
-
-// ═══════════════════════════════════════════
-// SELECT USER
-// ═══════════════════════════════════════════
+// ═══════════════════ SELECT USER ═══════════════════
 async function selectUser(otherId) {
   if (otherId === currentUser.id) return;
   const other = allUsers.find(u => u.id === otherId);
   if (!other) return;
+
   currentOtherUser = other;
   clearAttachment();
   replyTo = null;
   cancelEdit();
-  renderReplyPreview();
 
+  // پیدا یا ساخت مکالمه
   const [u1, u2] = [currentUser.id, otherId].sort();
   let { data: conv } = await supabase.from('conversations').select('*')
     .or('and(user1_id.eq.' + u1 + ',user2_id.eq.' + u2 + '),and(user1_id.eq.' + u2 + ',user2_id.eq.' + u1 + ')')
@@ -266,40 +377,73 @@ async function selectUser(otherId) {
       .insert({ user1_id: u1, user2_id: u2 }).select().single();
     if (error) { showToast('خطا: ' + error.message, 'error'); return; }
     conv = created;
+    // اضافه به لیست
+    if (!chatList.find(i => i.otherUser.id === otherId)) {
+      chatList.unshift({ otherUser: other, conversation: conv, lastMessage: null, unread: 0 });
+    } else {
+      const it = chatList.find(i => i.otherUser.id === otherId);
+      it.conversation = conv;
+    }
   }
+
   currentConversation = conv;
 
+  // هدر
   const name = other.display_name || other.username;
   $('chatName').textContent = name;
-  $('chatStatus').textContent = other.is_online ? 'آنلاین' : 'آفلاین';
+  updateChatStatus();
   const av = $('chatAvatar');
-  av.textContent = getInitials(name);
-  av.style.background = avatarColor(other.id);
-  $('chatHeader').style.display = 'flex';
-  $('composer').style.display = 'flex';
-  $('sidebar').classList.add('hidden');
-  setInChat(true);
-  renderUsers();
+  av.textContent = other.avatar_url ? '' : getInitials(name);
+  av.innerHTML = other.avatar_url ? '<img src="' + other.avatar_url + '" alt="">' : getInitials(name);
+  av.style.background = other.avatar_url ? 'transparent' : avatarColor(other.id);
 
+  $('chatEmpty').style.display = 'none';
+  $('chatActive').style.display = 'flex';
+  $('sidebar').classList.add('hidden');
+  document.body.classList.add('in-chat');
+
+  renderChatList();
   await loadMessages();
   subscribeMessages();
   subscribeReactions();
+
   setTimeout(() => $('messageInput').focus(), 200);
 }
 
-// ═══════════════════════════════════════════
-// MESSAGES
-// ═══════════════════════════════════════════
+function updateChatStatus() {
+  if (!currentOtherUser) return;
+  const el = $('chatStatus');
+  if (currentOtherUser.is_online) {
+    el.textContent = 'آنلاین';
+    el.classList.add('online');
+  } else {
+    el.classList.remove('online', 'typing');
+    if (currentOtherUser.last_seen) {
+      const diff = (Date.now() - new Date(currentOtherUser.last_seen)) / 1000;
+      if (diff < 60) el.textContent = 'آخرین بازدید لحظاتی پیش';
+      else if (diff < 3600) el.textContent = 'آخرین بازدید ' + Math.floor(diff/60) + ' دقیقه پیش';
+      else if (diff < 86400) el.textContent = 'آخرین بازدید ' + Math.floor(diff/3600) + ' ساعت پیش';
+      else el.textContent = 'آخرین بازدید ' + formatTime(currentOtherUser.last_seen);
+    } else {
+      el.textContent = 'آفلاین';
+    }
+  }
+}
+
+// ═══════════════════ MESSAGES ═══════════════════
 async function loadMessages() {
   if (!currentConversation) return;
+
   const { data, error } = await supabase.from('messages').select('*')
     .eq('conversation_id', currentConversation.id)
-    .order('created_at', { ascending: true }).limit(300);
+    .order('created_at', { ascending: true })
+    .limit(300);
+
   if (error) { showToast('خطا: ' + error.message, 'error'); return; }
 
   allMessages = data || [];
 
-  // بارگذاری واکنش‌ها
+  // واکنش‌ها
   const ids = allMessages.map(m => m.id);
   reactionsMap = {};
   if (ids.length) {
@@ -311,7 +455,7 @@ async function loadMessages() {
   }
 
   renderAllMessages();
-  scrollToBottom();
+  scrollToBottom(false);
   markAsRead();
   updatePinnedBanner();
 }
@@ -320,26 +464,47 @@ function renderAllMessages() {
   const area = $('messagesArea');
   area.innerHTML = '';
   if (!allMessages.length) {
-    area.innerHTML = '<div class="empty-chat" style="flex:1"><div class="big-icon">✨</div><p>اولین پیام را بفرست!</p></div>';
+    area.innerHTML = '<div class="empty-chat"><div class="empty-art">✨</div><p>اولین پیام را بفرست!</p></div>';
     return;
   }
-  allMessages.forEach((m, i) => {
-    const prev = i > 0 ? allMessages[i - 1] : null;
-    if (shouldShowDate(m, prev)) {
+
+  let prevMsg = null;
+  for (const m of allMessages) {
+    if (shouldShowDate(m, prevMsg)) {
       const sep = document.createElement('div');
       sep.className = 'date-separator';
       sep.innerHTML = '<span>' + formatDateSeparator(m.created_at) + '</span>';
       area.appendChild(sep);
     }
-    renderMessage(m);
-  });
+    renderMessage(m, prevMsg);
+    prevMsg = m;
+  }
 }
 
-function getMessageById(id) {
-  return allMessages.find(m => m.id === id);
+function shouldShowDate(cur, prev) {
+  if (!prev) return true;
+  return new Date(cur.created_at).toDateString() !== new Date(prev.created_at).toDateString();
 }
 
-function renderMessage(msg) {
+function formatDateSeparator(dateStr) {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.floor((today - msgDay) / 86400000);
+
+  if (diffDays === 0) return 'امروز';
+  if (diffDays === 1) return 'دیروز';
+  if (diffDays < 7) {
+    const days = ['یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه','شنبه'];
+    return days[d.getDay()];
+  }
+  try {
+    return new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' }).format(d);
+  } catch { return d.toLocaleDateString('fa-IR'); }
+}
+
+function renderMessage(msg, prevMsg) {
   const area = $('messagesArea');
   const empty = area.querySelector('.empty-chat');
   if (empty) empty.remove();
@@ -351,20 +516,19 @@ function renderMessage(msg) {
   const div = document.createElement('div');
   div.className = 'message ' + (isMine ? 'mine' : 'theirs');
   div.dataset.id = msg.id;
-  if (msg.pinned_at) div.classList.add('pinned');
 
-  // Reply quote
+  // Reply
   let replyHtml = '';
   if (msg.reply_to_id) {
-    const orig = getMessageById(msg.reply_to_id);
+    const orig = allMessages.find(m => m.id === msg.reply_to_id);
     if (orig) {
-      const origSender = orig.sender_id === currentUser.id ? currentProfile : currentOtherUser;
-      const origName = origSender?.display_name || origSender?.username || '?';
-      const origText = orig.content || (orig.attachment_type === 'image' ? '📷 عکس' : orig.attachment_type === 'video' ? '🎥 فیلم' : '📄 فایل');
-      replyHtml = '<div class="reply-quote" onclick="window.scrollToMessage(\'' + orig.id + '\')">' +
-        '<div class="rq-name">' + escapeHtml(origName) + '</div>' +
-        '<div class="rq-text">' + escapeHtml(origText.substring(0, 80)) + '</div>' +
-        '</div>';
+      const oSender = orig.sender_id === currentUser.id ? currentProfile : currentOtherUser;
+      const oName = oSender?.display_name || oSender?.username || '?';
+      const oText = orig.content || (orig.attachment_type === 'image' ? '📷 عکس' : orig.attachment_type === 'video' ? '🎥 ویدیو' : '📄 فایل');
+      replyHtml = '<div class="reply-quote" data-target="' + orig.id + '">' +
+        '<div class="rq-name">' + escapeHtml(oName) + '</div>' +
+        '<div class="rq-text">' + escapeHtml(oText.substring(0, 80)) + '</div>' +
+      '</div>';
     }
   }
 
@@ -372,20 +536,33 @@ function renderMessage(msg) {
   let attachHtml = '';
   if (msg.attachment_url) {
     if (msg.attachment_type === 'image') {
-      attachHtml = '<div class="attach-image" onclick="window.openLightbox(\'' + msg.attachment_url + '\')"><img src="' + msg.attachment_url + '" loading="lazy" alt=""></div>';
+      attachHtml = '<div class="attach-image"><img src="' + msg.attachment_url + '" loading="lazy" alt=""></div>';
     } else if (msg.attachment_type === 'video') {
       attachHtml = '<div class="attach-video"><video src="' + msg.attachment_url + '" controls preload="metadata"></video></div>';
+    } else if (msg.attachment_type === 'voice') {
+      const dur = msg.attachment_size || 0; // برای voice از size استفاده می‌کنیم برای مدت
+      attachHtml = '<div class="attach-voice">' +
+        '<button class="voice-play" data-src="' + msg.attachment_url + '">▶</button>' +
+        '<div class="voice-wave-mini"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>' +
+        '<span class="voice-dur">' + formatDuration(dur) + '</span>' +
+      '</div>';
     } else {
       const sz = msg.attachment_size ? ' (' + fmtSize(msg.attachment_size) + ')' : '';
       attachHtml = '<a class="attach-file" href="' + msg.attachment_url + '" target="_blank" download="' + escapeHtml(msg.attachment_name || 'file') + '">' +
         '<div class="attach-file-icon">📄</div>' +
         '<div class="attach-file-info"><div class="name">' + escapeHtml(msg.attachment_name || 'فایل') + '</div><div class="size">' + sz + '</div></div>' +
-        '</a>';
+      '</a>';
     }
   }
 
-  const textHtml = msg.content ? '<div class="bubble-text">' + escapeHtml(msg.content) + '</div>' : '';
-  const editedHtml = msg.edited_at ? '<span class="edited-mark">(ویرایش‌شده)</span>' : '';
+  const textHtml = msg.content ? '<span class="msg-text">' + escapeHtml(msg.content) + '</span>' : '';
+  const editedHtml = msg.edited_at ? ' <span class="edited-mark">(ویرایش‌شده)</span>' : '';
+
+  // Tick
+  let tickHtml = '';
+  if (isMine) {
+    tickHtml = msg.read_at ? '<span class="tick read">✓✓</span>' : '<span class="tick">✓✓</span>';
+  }
 
   // Reactions
   const reactions = reactionsMap[msg.id] || [];
@@ -398,71 +575,89 @@ function renderMessage(msg) {
   let reactionsHtml = '';
   if (Object.keys(grouped).length) {
     reactionsHtml = '<div class="reactions-row">' + Object.entries(grouped).map(([emoji, info]) =>
-      '<button class="reaction-chip ' + (info.mine ? 'mine' : '') + '" onclick="window.toggleReaction(\'' + msg.id + '\',\'' + emoji + '\')">' +
-      emoji + '<span>' + info.count + '</span></button>'
+      '<button class="reaction-chip ' + (info.mine ? 'mine' : '') + '" data-emoji="' + emoji + '">' +
+        emoji + '<span>' + info.count + '</span></button>'
     ).join('') + '</div>';
   }
 
-  // Actions
-  const actions = [];
-  actions.push('<button class="msg-action" onclick="window.startReply(\'' + msg.id + '\')" title="پاسخ">↩️</button>');
-  actions.push('<button class="msg-action msg-action-react" onclick="window.showReactionPicker(event, \'' + msg.id + '\')" title="واکنش">😊</button>');
-  actions.push('<button class="msg-action" onclick="window.copyMessage(\'' + msg.id + '\')" title="کپی">📋</button>');
-  actions.push('<button class="msg-action" onclick="window.togglePin(\'' + msg.id + '\')" title="پین">📌</button>');
-  if (isMine) {
-    actions.push('<button class="msg-action" onclick="window.startEdit(\'' + msg.id + '\')" title="ویرایش">✏️</button>');
-    actions.push('<button class="msg-action danger" onclick="window.deleteMessage(\'' + msg.id + '\')" title="حذف">🗑</button>');
-  }
-
   div.innerHTML =
-    '<div class="msg-avatar" style="background:' + avatarColor(msg.sender_id) + '">' + getInitials(name) + '</div>' +
     '<div class="bubble">' + replyHtml + attachHtml + textHtml +
-      '<span class="meta">' + formatTime(msg.created_at) + editedHtml + '</span>' +
-      '<div class="msg-actions">' + actions.join('') + '</div>' +
+      '<span class="meta">' + editedHtml + formatTime(msg.created_at) + tickHtml + '</span>' +
     '</div>' +
     reactionsHtml;
+
+  // رویدادها
+  const bubble = div.querySelector('.bubble');
+  bubble.addEventListener('contextmenu', (e) => { e.preventDefault(); showMessageMenu(e, msg); });
+  bubble.addEventListener('click', (e) => {
+    if (e.target.closest('.attach-image')) {
+      openLightbox(msg.attachment_url);
+      return;
+    }
+    if (e.target.closest('.voice-play')) {
+      playVoice(e.target.closest('.voice-play'));
+      return;
+    }
+    if (e.target.closest('.reply-quote')) {
+      scrollToMessage(msg.reply_to_id);
+      return;
+    }
+  });
+
+  div.querySelectorAll('.reaction-chip').forEach(chip => {
+    chip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleReaction(msg.id, chip.dataset.emoji);
+    });
+  });
 
   area.appendChild(div);
 }
 
-function updateMessageInDOM(msg) {
-  const old = document.querySelector('[data-id="' + msg.id + '"]');
-  if (old) old.remove();
-  const idx = allMessages.findIndex(m => m.id === msg.id);
-  if (idx >= 0) allMessages[idx] = msg;
-  renderMessage(msg);
-  // preserve order: easiest is re-render all
-  renderAllMessages();
-  scrollToBottom();
+function formatDuration(sec) {
+  sec = parseInt(sec) || 0;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m + ':' + String(s).padStart(2, '0');
 }
 
+// ═══════════════════ REALTIME ═══════════════════
 function subscribeMessages() {
   if (messagesChannel) supabase.removeChannel(messagesChannel);
-  messagesChannel = supabase.channel('messages-' + currentConversation.id)
+  messagesChannel = supabase.channel('msg-' + currentConversation.id)
     .on('postgres_changes', {
       event: 'INSERT', schema: 'public', table: 'messages',
       filter: 'conversation_id=eq.' + currentConversation.id
     }, (payload) => {
       const msg = payload.new;
       if (document.querySelector('[data-id="' + msg.id + '"]')) return;
+      const prev = allMessages[allMessages.length - 1];
       allMessages.push(msg);
-      renderMessage(msg);
-      scrollToBottom();
+
+      // اگه تاریخ عوض شده، separator اضافه کن
+      if (shouldShowDate(msg, prev)) {
+        const sep = document.createElement('div');
+        sep.className = 'date-separator';
+        sep.innerHTML = '<span>' + formatDateSeparator(msg.created_at) + '</span>';
+        $('messagesArea').appendChild(sep);
+      }
+
+      renderMessage(msg, prev);
+      scrollToBottom(true);
+
       if (msg.sender_id !== currentUser.id) {
-          markAsRead();
-          loadUnreadCounts().then(renderUsers);
-          playMsgSound();
-          const senderName = currentOtherUser?.display_name || currentOtherUser?.username || 'پیام جدید';
-          notifyNewMessage(msg, senderName);
-        }
+        markAsRead();
+        playMsgSound();
+        notifyNewMessage(msg);
+      }
       updatePinnedBanner();
+      updateChatListPreview(msg);
     })
     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, (payload) => {
       const el = document.querySelector('[data-id="' + payload.old.id + '"]');
       if (el) el.remove();
       allMessages = allMessages.filter(m => m.id !== payload.old.id);
       if (pinnedMsg?.id === payload.old.id) { pinnedMsg = null; updatePinnedBanner(); }
-      checkEmpty();
     })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (payload) => {
       const msg = payload.new;
@@ -476,265 +671,126 @@ function subscribeMessages() {
     .subscribe();
 }
 
-function subscribeReactions() {
-  if (reactionsChannel) supabase.removeChannel(reactionsChannel);
-  reactionsChannel = supabase.channel('reactions-changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' }, (payload) => {
-      const r = payload.new || payload.old;
-      if (!r) return;
-      const msg = allMessages.find(m => m.id === r.message_id);
-      if (!msg) return;
-      // reload reactions for this message
-      refreshReactionsFor(r.message_id);
+function subscribeAllMessages() {
+  supabase.channel('all-msgs')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
+      const msg = payload.new;
+      // اگر پیام مربوط به مکالمه فعلی است، رد کن (subscribeMessages گرفته)
+      if (currentConversation && msg.conversation_id === currentConversation.id) return;
+      // به‌روز لیست
+      await loadChatList();
+      // اعلان اگر مال من نیست
+      if (msg.sender_id !== currentUser.id) {
+        notifyNewMessage(msg);
+        playMsgSound();
+      }
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, () => {
+      // tick خوانده‌شدن را آپدیت کن
+      if (currentConversation) {
+        allMessages.forEach(async (m, i) => {
+          const { data } = await supabase.from('messages').select('read_at').eq('id', m.id).single();
+          if (data && data.read_at !== m.read_at) {
+            m.read_at = data.read_at;
+            const el = document.querySelector('[data-id="' + m.id + '"]');
+            if (el) el.remove();
+            renderMessage(m);
+          }
+        });
+      }
     })
     .subscribe();
 }
 
-async function refreshReactionsFor(messageId) {
-  const { data } = await supabase.from('reactions').select('*').eq('message_id', messageId);
-  reactionsMap[messageId] = data || [];
-  const el = document.querySelector('[data-id="' + messageId + '"]');
-  if (el) el.remove();
-  const msg = allMessages.find(m => m.id === messageId);
-  if (msg) renderMessage(msg);
+function subscribeReactions() {
+  if (reactionsChannel) supabase.removeChannel(reactionsChannel);
+  reactionsChannel = supabase.channel('rxns-' + currentConversation.id)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' }, async (payload) => {
+      const r = payload.new || payload.old;
+      if (!r || !r.message_id) return;
+      const { data } = await supabase.from('reactions').select('*').eq('message_id', r.message_id);
+      reactionsMap[r.message_id] = data || [];
+      const el = document.querySelector('[data-id="' + r.message_id + '"]');
+      if (el) el.remove();
+      const msg = allMessages.find(m => m.id === r.message_id);
+      if (msg) renderMessage(msg);
+    })
+    .subscribe();
 }
 
-function checkEmpty() {
-  const area = $('messagesArea');
-  if (!area.querySelector('.message')) {
-    area.innerHTML = '<div class="empty-chat" style="flex:1"><div class="big-icon">✨</div><p>اولین پیام را بفرست!</p></div>';
+function subscribeProfiles() {
+  supabase.channel('profiles-live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, async () => {
+      await loadAllUsers();
+      await loadChatList();
+      if (currentOtherUser) {
+        currentOtherUser = allUsers.find(u => u.id === currentOtherUser.id) || currentOtherUser;
+        updateChatStatus();
+      }
+    })
+    .subscribe();
+}
+
+function updateChatListPreview(msg) {
+  const item = chatList.find(i => i.conversation?.id === msg.conversation_id);
+  if (item) {
+    item.lastMessage = msg;
+    if (msg.sender_id !== currentUser.id) item.unread = (item.unread || 0) + 1;
   }
-}
-
-// ═══════════════════════════════════════════
-// REPLY
-// ═══════════════════════════════════════════
-window.startReply = function(messageId) {
-  const msg = getMessageById(messageId);
-  if (!msg) return;
-  replyTo = msg;
-  cancelEdit();
-  renderReplyPreview();
-  $('messageInput').focus();
-};
-
-function renderReplyPreview() {
-  const el = $('replyPreview');
-  if (!replyTo) { el.style.display = 'none'; return; }
-  const sender = replyTo.sender_id === currentUser.id ? currentProfile : currentOtherUser;
-  $('replyName').textContent = sender?.display_name || sender?.username || '?';
-  const text = replyTo.content || (replyTo.attachment_type === 'image' ? '📷 عکس' : replyTo.attachment_type === 'video' ? '🎥 فیلم' : '📄 فایل');
-  $('replyText').textContent = text.substring(0, 100);
-  el.style.display = 'flex';
-  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-// ═══════════════════════════════════════════
-// EDIT
-// ═══════════════════════════════════════════
-window.startEdit = function(messageId) {
-  const msg = getMessageById(messageId);
-  if (!msg || msg.sender_id !== currentUser.id) return;
-  editingId = messageId;
-  $('messageInput').value = msg.content || '';
-  $('messageInput').focus();
-  $('editText').textContent = (msg.content || '').substring(0, 100);
-  $('editBanner').style.display = 'flex';
-  replyTo = null;
-  renderReplyPreview();
-  updateSendButton();
-};
-
-function cancelEdit() {
-  editingId = null;
-  $('messageInput').value = '';
-  $('editBanner').style.display = 'none';
-  updateSendButton();
-}
-
-// ═══════════════════════════════════════════
-// REACTIONS
-// ═══════════════════════════════════════════
-window.showReactionPicker = function(evt, messageId) {
-  evt.stopPropagation();
-  document.querySelectorAll('.reaction-picker').forEach(p => p.remove());
-
-  const picker = document.createElement('div');
-  picker.className = 'reaction-picker';
-  EMOJIS.forEach(e => {
-    const b = document.createElement('button');
-    b.textContent = e;
-    b.onclick = (ev) => { ev.stopPropagation(); window.toggleReaction(messageId, e); picker.remove(); };
-    picker.appendChild(b);
+  chatList.sort((a, b) => {
+    const at = a.lastMessage?.created_at ? new Date(a.lastMessage.created_at) : 0;
+    const bt = b.lastMessage?.created_at ? new Date(b.lastMessage.created_at) : 0;
+    return bt - at;
   });
-
-  const bubble = evt.target.closest('.message').querySelector('.bubble');
-  bubble.style.position = 'relative';
-  bubble.appendChild(picker);
-};
-
-window.toggleReaction = async function(messageId, emoji) {
-  const existing = (reactionsMap[messageId] || []).find(r => r.user_id === currentUser.id && r.emoji === emoji);
-  if (existing) {
-    await supabase.from('reactions').delete().eq('id', existing.id);
-  } else {
-    // حذف واکنش‌های قبلی این کاربر روی این پیام (هر کاربر یک واکنش)
-    const mine = (reactionsMap[messageId] || []).filter(r => r.user_id === currentUser.id);
-    for (const r of mine) {
-      await supabase.from('reactions').delete().eq('id', r.id);
-    }
-    await supabase.from('reactions').insert({ message_id: messageId, user_id: currentUser.id, emoji });
-  }
-};
-
-// ═══════════════════════════════════════════
-// PIN
-// ═══════════════════════════════════════════
-window.togglePin = async function(messageId) {
-  const msg = getMessageById(messageId);
-  if (!msg) return;
-  const newVal = msg.pinned_at ? null : new Date().toISOString();
-  const { error } = await supabase.from('messages').update({ pinned_at: newVal }).eq('id', messageId);
-  if (error) { showToast('خطا: ' + error.message, 'error'); return; }
-  showToast(newVal ? 'پین شد 📌' : 'از پین خارج شد', 'success');
-};
-
-function updatePinnedBanner() {
-  const pins = allMessages.filter(m => m.pinned_at).sort((a, b) => new Date(b.pinned_at) - new Date(a.pinned_at));
-  if (!pins.length) {
-    $('pinnedBanner').style.display = 'none';
-    pinnedMsg = null;
-    return;
-  }
-  pinnedMsg = pins[0];
-  $('pinnedText').textContent = (pinnedMsg.content || '📎 ضمیمه').substring(0, 80);
-  $('pinnedBanner').style.display = 'flex';
+  renderChatList();
+  updateUnreadTabBadge();
 }
 
-// ═══════════════════════════════════════════
-// SEARCH
-// ═══════════════════════════════════════════
-function toggleSearch(forceState) {
-  const bar = $('chatSearchBar');
-  const isHidden = bar.style.display === 'none' || !bar.style.display;
-  const show = forceState === undefined ? isHidden : forceState;
-  bar.style.display = show ? 'flex' : 'none';
-  if (show) { $('chatSearchInput').focus(); }
-  else { $('chatSearchInput').value = ''; $('searchCount').textContent = ''; clearSearchHighlights(); }
-}
-
-function performSearch(query) {
-  const q = query.trim().toLowerCase();
-  clearSearchHighlights();
-  if (!q) { $('searchCount').textContent = ''; return; }
-  const matches = [];
-  document.querySelectorAll('.message').forEach(el => {
-    const text = el.querySelector('.bubble-text')?.textContent?.toLowerCase() || '';
-    if (text.includes(q)) {
-      el.classList.add('search-match');
-      matches.push(el);
-    }
-  });
-  $('searchCount').textContent = matches.length ? matches.length + ' نتیجه' : 'یافت نشد';
-  if (matches.length) matches[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-function clearSearchHighlights() {
-  document.querySelectorAll('.search-match').forEach(el => el.classList.remove('search-match'));
-}
-
-// ═══════════════════════════════════════════
-// FILES
-// ═══════════════════════════════════════════
-function handleFileSelect(file) {
-  if (!file || !currentConversation) return;
-  let type = 'file';
-  if (file.type.startsWith('image/')) type = 'image';
-  else if (file.type.startsWith('video/')) type = 'video';
-  pendingAttachment = { file, type };
-  renderAttachmentPreview();
-  updateSendButton();
-}
-
-function renderAttachmentPreview() {
-  const wrap = $('attachmentPreview');
-  const content = $('attachPreviewContent');
-  const info = $('attachInfo');
-  if (!pendingAttachment) { wrap.style.display = 'none'; return; }
-  const { file, type } = pendingAttachment;
-  content.innerHTML = '';
-  if (type === 'image') {
-    const img = document.createElement('img');
-    img.src = URL.createObjectURL(file);
-    img.style.maxHeight = '80px';
-    img.style.borderRadius = '8px';
-    content.appendChild(img);
-  } else {
-    const icon = document.createElement('div');
-    icon.className = 'attach-icon';
-    icon.textContent = type === 'video' ? '🎥' : '📄';
-    content.appendChild(icon);
-  }
-  info.textContent = file.name + ' • ' + fmtSize(file.size);
-  wrap.style.display = 'flex';
-}
-
-function clearAttachment() {
-  pendingAttachment = null;
-  $('attachmentPreview').style.display = 'none';
-  $('fileInput').value = '';
-  updateSendButton();
-}
-
-async function uploadAttachment() {
-  if (!pendingAttachment) return null;
-  const { file, type } = pendingAttachment;
+// ═══════════════════ SEND ═══════════════════
+function setupComposer() {
+  const input = $('messageInput');
   const sendBtn = $('sendBtn');
-  const orig = sendBtn.textContent;
 
-  let finalFile = file;
-  try {
-    const result = await compressFile(file, (s) => { $('typingIndicator').textContent = s; }, (p) => {
-      $('typingIndicator').textContent = 'فشرده‌سازی فیلم: ' + p + '%';
-    });
-    finalFile = result.file;
-    if (result.compressed) {
-      const saved = result.originalSize - result.newSize;
-      const pct = Math.round((saved / result.originalSize) * 100);
-      showToast('فشرده شد: ' + fmtSize(result.originalSize) + ' → ' + fmtSize(result.newSize) + ' (−' + pct + '%)', 'success');
-    }
-  } catch (e) {
-    sendBtn.textContent = orig;
-    $('typingIndicator').textContent = '';
-    throw new Error(e.message || 'فشرده‌سازی شکست خورد');
-  }
-
-  $('typingIndicator').textContent = 'در حال آپلود...';
-
-  const ts = Date.now();
-  const safeName = finalFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const path = currentUser.id + '/' + currentConversation.id + '/' + ts + '-' + safeName;
-
-  const { error } = await supabase.storage.from(BUCKET).upload(path, finalFile, {
-    cacheControl: '3600', upsert: false, contentType: finalFile.type
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    updateSendButton();
+    broadcastTyping();
+    toggleVoiceBtn();
   });
-  if (error) { $('typingIndicator').textContent = ''; throw error; }
 
-  $('typingIndicator').textContent = '';
-  const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return {
-    url: pub.publicUrl, type, name: finalFile.name, size: finalFile.size, path
-  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+    if (e.key === 'Escape' && editingId) cancelEdit();
+  });
+
+  sendBtn.onclick = sendMessage;
 }
 
-// ═══════════════════════════════════════════
-// SEND / EDIT
-// ═══════════════════════════════════════════
+function toggleVoiceBtn() {
+  const input = $('messageInput');
+  const voiceBtn = $('voiceBtn');
+  if (input.value.trim()) {
+    voiceBtn.style.display = 'none';
+  } else {
+    voiceBtn.style.display = 'flex';
+  }
+}
+
+function updateSendButton() {
+  const input = $('messageInput');
+  const hasText = input.value.trim().length > 0;
+  $('sendBtn').disabled = !hasText && !pendingAttachment && !editingId;
+  toggleVoiceBtn();
+}
+
 async function sendMessage() {
   const input = $('messageInput');
   const content = input.value.trim();
 
-  // EDIT MODE
   if (editingId) {
     if (!content) return;
     const { error } = await supabase.from('messages')
@@ -742,11 +798,10 @@ async function sendMessage() {
       .eq('id', editingId);
     if (error) { showToast('خطا: ' + error.message, 'error'); return; }
     cancelEdit();
-    showToast('ویرایش شد', 'success');
+    showToast('ویرایش شد ✅', 'success');
     return;
   }
 
-  // SEND MODE
   if ((!content && !pendingAttachment) || !currentConversation) return;
   const sendBtn = $('sendBtn');
   sendBtn.disabled = true;
@@ -754,7 +809,6 @@ async function sendMessage() {
   try {
     let attach = null;
     if (pendingAttachment) {
-      sendBtn.textContent = '⏳';
       attach = await uploadAttachment();
     }
 
@@ -775,214 +829,519 @@ async function sendMessage() {
     if (error) throw error;
 
     input.value = '';
-    input.style.height = '46px';
+    input.style.height = '40px';
     clearAttachment();
     replyTo = null;
     renderReplyPreview();
     playSendSound();
     requestNotifPermission();
   } catch (err) {
-    showToast('خطا در ارسال: ' + err.message, 'error');
+    showToast('خطا: ' + err.message, 'error');
   } finally {
-    sendBtn.textContent = '📤';
     updateSendButton();
   }
 }
 
-// ═══════════════════════════════════════════
-// DELETE / COPY / SCROLL
-// ═══════════════════════════════════════════
-window.deleteMessage = async function(messageId) {
-  if (!confirm('این پیام حذف شود؟')) return;
-  const { error } = await supabase.from('messages').delete().eq('id', messageId);
-  if (error) { showToast('خطا: ' + error.message, 'error'); return; }
-  showToast('حذف شد', 'success');
-};
+// ═══════════════════ REPLY / EDIT ═══════════════════
+function renderReplyPreview() {
+  const el = $('replyPreview');
+  if (!replyTo) { el.style.display = 'none'; return; }
+  const sender = replyTo.sender_id === currentUser.id ? currentProfile : currentOtherUser;
+  $('replyName').textContent = sender?.display_name || sender?.username || '?';
+  const text = replyTo.content || (replyTo.attachment_type === 'image' ? '📷 عکس' : replyTo.attachment_type === 'video' ? '🎥 ویدیو' : '📄 فایل');
+  $('replyText').textContent = text.substring(0, 100);
+  el.style.display = 'flex';
+  $('messageInput').focus();
+}
 
-window.copyMessage = function(messageId) {
-  const msg = getMessageById(messageId);
-  if (!msg) return;
+function cancelEdit() {
+  editingId = null;
+  $('messageInput').value = '';
+  $('messageInput').style.height = '40px';
+  $('editPreview').style.display = 'none';
+  updateSendButton();
+}
+
+$('replyClose') && ($('replyClose').onclick = () => { replyTo = null; renderReplyPreview(); });
+$('editClose') && ($('editClose').onclick = cancelEdit);
+$('attachClose') && ($('attachClose').onclick = clearAttachment);
+
+// ═══════════════════ ATTACHMENTS ═══════════════════
+function setupSheets() {
+  $('attachBtn').onclick = () => { $('attachSheet').style.display = 'flex'; };
+  $('attachSheet').onclick = (e) => {
+    if (e.target.id === 'attachSheet') $('attachSheet').style.display = 'none';
+  };
+
+  document.querySelectorAll('.sheet-grid button').forEach(btn => {
+    btn.onclick = () => {
+      const type = btn.dataset.type;
+      $('attachSheet').style.display = 'none';
+      if (type === 'gallery') $('galleryInput').click();
+      else if (type === 'camera') $('cameraInput').click();
+      else if (type === 'file') $('fileInput').click();
+      else if (type === 'video') $('fileInput').click();
+      else showToast('به‌زودی', 'info');
+    };
+  });
+
+  $('galleryInput').onchange = (e) => {
+    const f = e.target.files[0];
+    if (f) handleFileSelect(f);
+    e.target.value = '';
+  };
+  $('cameraInput').onchange = (e) => {
+    const f = e.target.files[0];
+    if (f) handleFileSelect(f);
+    e.target.value = '';
+  };
+  $('fileInput').onchange = (e) => {
+    const f = e.target.files[0];
+    if (f) handleFileSelect(f);
+    e.target.value = '';
+  };
+
+  // Drag & Drop
+  document.addEventListener('dragover', (e) => e.preventDefault());
+  document.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer.files[0] && currentConversation) handleFileSelect(e.dataTransfer.files[0]);
+  });
+
+  // Paste
+  document.addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const it of items) {
+      if (it.type?.startsWith('image/')) {
+        const f = it.getAsFile();
+        if (f) handleFileSelect(f);
+        e.preventDefault();
+        return;
+      }
+    }
+  });
+}
+
+function handleFileSelect(file) {
+  if (!file || !currentConversation) return;
+  let type = 'file';
+  if (file.type.startsWith('image/')) type = 'image';
+  else if (file.type.startsWith('video/')) type = 'video';
+  else if (file.type.startsWith('audio/')) type = 'voice';
+
+  pendingAttachment = { file, type };
+  renderAttachPreview();
+  updateSendButton();
+}
+
+function renderAttachPreview() {
+  const wrap = $('attachPreview');
+  const body = $('attachPreviewBody');
+  const info = $('attachInfo');
+  if (!pendingAttachment) { wrap.style.display = 'none'; return; }
+  const { file, type } = pendingAttachment;
+  body.innerHTML = '';
+  if (type === 'image') {
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    body.appendChild(img);
+  } else if (type === 'video') body.textContent = '🎥';
+  else if (type === 'voice') body.textContent = '🎤';
+  else body.textContent = '📄';
+  info.textContent = file.name + ' • ' + fmtSize(file.size);
+  wrap.style.display = 'flex';
+}
+
+function clearAttachment() {
+  pendingAttachment = null;
+  $('attachPreview').style.display = 'none';
+  updateSendButton();
+}
+
+async function uploadAttachment() {
+  if (!pendingAttachment) return null;
+  const { file, type } = pendingAttachment;
+  let finalFile = file;
+
+  try {
+    const result = await compressFile(file, (s) => $('typingText') && ($('typingText').textContent = s), () => {});
+    finalFile = result.file;
+    if (result.compressed) {
+      const saved = result.originalSize - result.newSize;
+      const pct = Math.round((saved / result.originalSize) * 100);
+      showToast('فشرده شد: ' + fmtSize(result.originalSize) + ' → ' + fmtSize(result.newSize) + ' (−' + pct + '%)', 'success');
+    }
+  } catch (e) { /* ادامه با فایل اصلی */ }
+
+  const ts = Date.now();
+  const safeName = finalFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = currentUser.id + '/' + currentConversation.id + '/' + ts + '-' + safeName;
+
+  const { error } = await supabase.storage.from(BUCKET).upload(path, finalFile, {
+    cacheControl: '3600', upsert: false, contentType: finalFile.type
+  });
+  if (error) throw error;
+
+  const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  return { url: pub.publicUrl, type, name: finalFile.name, size: finalFile.size, path };
+}
+
+// ═══════════════════ EMOJI ═══════════════════
+function setupEmoji() {
+  const picker = $('emojiPicker');
+  const tabs = $('emojiTabs');
+  const grid = $('emojiGrid');
+
+  tabs.innerHTML = Object.keys(EMOJI_CATEGORIES).map((cat, i) =>
+    '<button data-cat="' + i + '"' + (i === 0 ? ' class="active"' : '') + '>' + cat + '</button>'
+  ).join('');
+
+  function renderEmojis(catIdx) {
+    const cat = Object.values(EMOJI_CATEGORIES)[catIdx];
+    grid.innerHTML = cat.map(e => '<button>' + e + '</button>').join('');
+    grid.querySelectorAll('button').forEach(b => {
+      b.onclick = () => {
+        const input = $('messageInput');
+        input.value += b.textContent;
+        input.focus();
+        updateSendButton();
+      };
+    });
+  }
+
+  renderEmojis(0);
+  tabs.querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      tabs.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      renderEmojis(+b.dataset.cat);
+    };
+  });
+
+  $('emojiBtn').onclick = (e) => {
+    e.stopPropagation();
+    picker.style.display = picker.style.display === 'none' ? 'flex' : 'none';
+  };
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#emojiPicker') && !e.target.closest('#emojiBtn')) {
+      picker.style.display = 'none';
+    }
+  });
+}
+
+// ═══════════════════ MESSAGE MENU ═══════════════════
+function showMessageMenu(e, msg) {
+  const isMine = msg.sender_id === currentUser.id;
+  const items = [
+    { icon: '↩️', label: 'پاسخ', action: () => { replyTo = msg; renderReplyPreview(); } },
+    { icon: '😊', label: 'واکنش', action: () => showReactionPickerFor(msg) },
+    { icon: '📋', label: 'کپی', action: () => copyMsg(msg) },
+    { icon: '📌', label: msg.pinned_at ? 'برداشتن پین' : 'پین', action: () => togglePin(msg) }
+  ];
+  if (isMine && msg.content) items.push({ icon: '✏️', label: 'ویرایش', action: () => startEdit(msg) });
+  items.push({ icon: '➡️', label: 'فوروارد', action: () => showToast('به‌زودی') });
+  if (isMine) items.push({ icon: '🗑', label: 'حذف', action: () => deleteMsg(msg), danger: true });
+
+  showMenu(e, items);
+}
+
+function showMenu(e, items) {
+  const menu = $('contextMenu');
+  menu.innerHTML = items.map((it, i) =>
+    '<button data-i="' + i + '"' + (it.danger ? ' class="danger"' : '') + '>' +
+      '<span class="emoji">' + it.icon + '</span>' + it.label +
+    '</button>'
+  ).join('');
+  menu.style.display = 'block';
+
+  const rect = menu.getBoundingClientRect();
+  let x = e.clientX, y = e.clientY;
+  if (x + rect.width > window.innerWidth - 10) x = window.innerWidth - rect.width - 10;
+  if (y + rect.height > window.innerHeight - 10) y = window.innerHeight - rect.height - 10;
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+
+  menu.querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      menu.style.display = 'none';
+      items[+b.dataset.i].action();
+    };
+  });
+}
+
+function setupContextMenuClose() {
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#contextMenu')) {
+      $('contextMenu').style.display = 'none';
+    }
+  });
+}
+
+function showReactionPickerFor(msg) {
+  const emojis = ['❤️', '😂', '👍', '😮', '😢', '🔥'];
+  showToast('روی ایموجی بزن', 'info');
+  // ساخت picker موقت
+  const picker = document.createElement('div');
+  picker.className = 'reaction-picker';
+  picker.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999';
+  picker.innerHTML = emojis.map(e => '<button>' + e + '</button>').join('');
+  document.body.appendChild(picker);
+  picker.querySelectorAll('button').forEach(b => {
+    b.onclick = () => { toggleReaction(msg.id, b.textContent); picker.remove(); };
+  });
+  setTimeout(() => document.addEventListener('click', function h(ev) {
+    if (!picker.contains(ev.target)) { picker.remove(); document.removeEventListener('click', h); }
+  }), 100);
+}
+
+async function toggleReaction(messageId, emoji) {
+  const mine = (reactionsMap[messageId] || []).find(r => r.user_id === currentUser.id && r.emoji === emoji);
+  if (mine) {
+    await supabase.from('reactions').delete().eq('id', mine.id);
+  } else {
+    const others = (reactionsMap[messageId] || []).filter(r => r.user_id === currentUser.id);
+    for (const r of others) await supabase.from('reactions').delete().eq('id', r.id);
+    await supabase.from('reactions').insert({ message_id: messageId, user_id: currentUser.id, emoji });
+  }
+}
+
+function startEdit(msg) {
+  editingId = msg.id;
+  $('messageInput').value = msg.content || '';
+  $('messageInput').focus();
+  $('editText').textContent = (msg.content || '').substring(0, 100);
+  $('editPreview').style.display = 'flex';
+  replyTo = null;
+  renderReplyPreview();
+  updateSendButton();
+}
+
+function copyMsg(msg) {
   const text = msg.content || msg.attachment_url || '';
   navigator.clipboard.writeText(text).then(() => showToast('کپی شد 📋', 'success'))
     .catch(() => showToast('کپی نشد', 'error'));
-};
+}
 
-window.scrollToMessage = function(messageId) {
-  const el = document.querySelector('[data-id="' + messageId + '"]');
+async function togglePin(msg) {
+  const newVal = msg.pinned_at ? null : new Date().toISOString();
+  const { error } = await supabase.from('messages').update({ pinned_at: newVal }).eq('id', msg.id);
+  if (error) { showToast('خطا: ' + error.message, 'error'); return; }
+  showToast(newVal ? 'پین شد 📌' : 'از پین خارج شد', 'success');
+}
+
+async function deleteMsg(msg) {
+  if (!confirm('این پیام حذف شود؟')) return;
+  const { error } = await supabase.from('messages').delete().eq('id', msg.id);
+  if (error) { showToast('خطا: ' + error.message, 'error'); return; }
+  showToast('حذف شد', 'success');
+}
+
+function updatePinnedBanner() {
+  const pins = allMessages.filter(m => m.pinned_at).sort((a, b) => new Date(b.pinned_at) - new Date(a.pinned_at));
+  if (!pins.length) {
+    $('pinnedBanner').style.display = 'none';
+    pinnedMsg = null;
+    return;
+  }
+  pinnedMsg = pins[0];
+  $('pinnedText').textContent = (pinnedMsg.content || '📎 ضمیمه').substring(0, 80);
+  $('pinnedBanner').style.display = 'flex';
+  $('pinBody').onclick = () => scrollToMessage(pinnedMsg.id);
+}
+
+$('pinClose') && ($('pinClose').onclick = () => $('pinnedBanner').style.display = 'none');
+
+// ═══════════════════ SEARCH ═══════════════════
+function setupSearch() {
+  $('searchInput').addEventListener('input', () => renderChatList());
+  $('searchInputChat').addEventListener('input', (e) => performSearch(e.target.value));
+  $('searchClose').onclick = () => toggleSearchBar(false);
+  $('searchPrev').onclick = () => navigateSearch(-1);
+  $('searchNext').onclick = () => navigateSearch(1);
+}
+
+function toggleSearchBar(show) {
+  $('searchBar').style.display = show ? 'flex' : 'none';
+  if (show) { $('searchInputChat').focus(); }
+  else {
+    $('searchInputChat').value = '';
+    $('searchCount').textContent = '';
+    searchResults = [];
+    document.querySelectorAll('.message.highlight').forEach(el => el.classList.remove('highlight'));
+  }
+}
+
+function performSearch(q) {
+  document.querySelectorAll('.message.highlight').forEach(el => el.classList.remove('highlight'));
+  searchResults = [];
+  searchIndex = 0;
+  if (!q.trim()) { $('searchCount').textContent = ''; return; }
+  const query = q.trim().toLowerCase();
+  document.querySelectorAll('.message').forEach(el => {
+    const txt = el.querySelector('.msg-text')?.textContent?.toLowerCase() || '';
+    if (txt.includes(query)) {
+      el.classList.add('highlight');
+      searchResults.push(el);
+    }
+  });
+  $('searchCount').textContent = searchResults.length ? '1/' + searchResults.length : 'یافت نشد';
+  if (searchResults.length) {
+    searchResults[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function navigateSearch(dir) {
+  if (!searchResults.length) return;
+  searchIndex = (searchIndex + dir + searchResults.length) % searchResults.length;
+  searchResults[searchIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  $('searchCount').textContent = (searchIndex + 1) + '/' + searchResults.length;
+}
+
+function scrollToMessage(id) {
+  const el = document.querySelector('[data-id="' + id + '"]');
   if (el) {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.classList.add('highlight-flash');
-    setTimeout(() => el.classList.remove('highlight-flash'), 1500);
+    el.classList.add('highlight');
+    setTimeout(() => el.classList.remove('highlight'), 1500);
   }
-};
-
-// ═══════════════════════════════════════════
-// LIGHTBOX
-// ═══════════════════════════════════════════
-window.openLightbox = function(url) {
-  $('lightboxImg').src = url;
-  $('lightbox').classList.add('show');
-};
-
-// ═══════════════════════════════════════════
-// MISC
-// ═══════════════════════════════════════════
-async function markAsRead() {
-  if (!currentConversation) return;
-  await supabase.from('messages').update({ read_at: new Date().toISOString() })
-    .eq('conversation_id', currentConversation.id)
-    .neq('sender_id', currentUser.id).is('read_at', null);
 }
 
-function scrollToBottom() {
-  const area = $('messagesArea');
-  requestAnimationFrame(() => { area.scrollTop = area.scrollHeight; });
-}
+// ═══════════════════ VOICE ═══════════════════
+function setupVoice() {
+  const btn = $('voiceBtn');
+  if (!btn) return;
 
-function broadcastTyping() {
-  if (!currentConversation) return;
-  if (!typingChannel) {
-    typingChannel = supabase.channel('typing-' + currentConversation.id);
-    typingChannel.on('broadcast', { event: 'typing' }, ({ payload }) => {
-      if (payload.user_id !== currentUser.id) {
-        $('typingIndicator').textContent = 'در حال تایپ...';
-        clearTimeout(typingTimer);
-        typingTimer = setTimeout(() => { $('typingIndicator').textContent = ''; }, 2000);
+  let isRecording = false;
+
+  btn.onclick = async () => {
+    if (!isRecording) {
+      try {
+        voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(voiceStream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+        mediaRecorder.onstop = async () => {
+          const blob = new Blob(audioChunks, { type: 'audio/webm' });
+          voiceStream.getTracks().forEach(t => t.stop());
+          await sendVoice(blob, voiceSeconds);
+        };
+        mediaRecorder.start();
+        isRecording = true;
+        voiceSeconds = 0;
+        $('voiceRecording').style.display = 'flex';
+        $('composer').style.display = 'none';
+        voiceTimer = setInterval(() => {
+          voiceSeconds++;
+          $('voiceTime').textContent = formatDuration(voiceSeconds);
+        }, 1000);
+        $('voiceTime').textContent = '0:00';
+      } catch (e) {
+        showToast('دسترسی به میکروفون رد شد', 'error');
       }
-    }).subscribe();
-  }
-  typingChannel.send({ type: 'broadcast', event: 'typing', payload: { user_id: currentUser.id } });
+    }
+  };
+
+  $('voiceCancel').onclick = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.onstop = null;
+      mediaRecorder.stop();
+      voiceStream.getTracks().forEach(t => t.stop());
+    }
+    clearInterval(voiceTimer);
+    isRecording = false;
+    $('voiceRecording').style.display = 'none';
+    $('composer').style.display = 'flex';
+  };
+
+  $('voiceSend').onclick = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+    }
+    clearInterval(voiceTimer);
+    isRecording = false;
+    $('voiceRecording').style.display = 'none';
+    $('composer').style.display = 'flex';
+  };
 }
 
+async function sendVoice(blob, duration) {
+  if (!currentConversation) return;
+  const ts = Date.now();
+  const path = currentUser.id + '/' + currentConversation.id + '/voice-' + ts + '.webm';
+  const file = new File([blob], 'voice.webm', { type: 'audio/webm' });
 
-// ═══════════════════════════════════════════
-// بسته ۲: اعلان‌ها / پروفایل / بج نخوانده / صدا / PWA
-// ═══════════════════════════════════════════
-
-// ─── اعلان مرورگر ───
-async function initNotifications() {
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'granted') { notificationGranted = true; return; }
-  if (Notification.permission === 'denied') return;
-  // درخواست نده خودکار - فقط وقتی کاربر پیام می‌فرستد یا می‌گیرد
-}
-
-async function requestNotifPermission() {
-  if (!('Notification' in window)) return false;
-  if (Notification.permission === 'granted') { notificationGranted = true; return true; }
-  if (Notification.permission === 'denied') return false;
-  const p = await Notification.requestPermission();
-  notificationGranted = p === 'granted';
-  return notificationGranted;
-}
-
-function notifyNewMessage(msg, senderName) {
-  if (!notificationGranted) return;
-  if (document.visibilityState === 'visible' && document.hasFocus()) return;
-  if (msg.sender_id === currentUser.id) return;
-
-  // جلوگیری از تکرار
-  const key = msg.id;
-  if (lastNotifications[key]) return;
-  lastNotifications[key] = true;
-  setTimeout(() => delete lastNotifications[key], 5000);
-
-  const body = msg.content || (msg.attachment_type === 'image' ? '📷 عکس' : msg.attachment_type === 'video' ? '🎥 فیلم' : '📄 فایل');
-  const notif = new Notification(senderName || 'پیام جدید', {
-    body: body.substring(0, 100),
-    icon: currentOtherUser?.avatar_url || undefined,
-    tag: 'msg-' + msg.id,
-    silent: false
+  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+    contentType: 'audio/webm'
   });
+  if (error) { showToast('خطا: ' + error.message, 'error'); return; }
 
-  notif.onclick = () => { window.focus(); notif.close(); };
+  const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  await supabase.from('messages').insert({
+    conversation_id: currentConversation.id,
+    sender_id: currentUser.id,
+    content: '',
+    attachment_url: pub.publicUrl,
+    attachment_type: 'voice',
+    attachment_size: duration
+  });
 }
 
-// ─── صدای پیام ───
-function playMsgSound() {
-  try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-    osc.frequency.setValueAtTime(660, audioCtx.currentTime + 0.08);
-    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
-    osc.start(audioCtx.currentTime);
-    osc.stop(audioCtx.currentTime + 0.25);
-  } catch (e) {}
+function playVoice(btn) {
+  const src = btn.dataset.src;
+  const audio = new Audio(src);
+  btn.textContent = '⏸';
+  audio.play();
+  audio.onended = () => { btn.textContent = '▶'; };
 }
 
-function playSendSound() {
-  try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.frequency.setValueAtTime(440, audioCtx.currentTime);
-    osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.08);
-    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
-    osc.start(audioCtx.currentTime);
-    osc.stop(audioCtx.currentTime + 0.18);
-  } catch (e) {}
+// ═══════════════════ SCROLL ═══════════════════
+function setupScrollBottom() {
+  const area = $('messagesArea');
+  const btn = $('scrollBottom');
+  area.addEventListener('scroll', () => {
+    const near = area.scrollHeight - area.scrollTop - area.clientHeight < 200;
+    btn.style.display = near ? 'none' : 'flex';
+  });
+  btn.onclick = () => scrollToBottom(true);
 }
 
-// ─── حالت خودکار ───
-function applyAutoTheme() {
-  // اگر کاربر دستی انتخاب نکرده، بر اساس ساعت تنظیم کن
-  if (localStorage.getItem('chat_theme')) return;
-  const h = new Date().getHours();
-  const isDark = h >= 19 || h < 7;
-  if (isDark) {
-    document.body.classList.add('dark');
-    $('themeBtn').textContent = '☀️';
-  }
+function scrollToBottom(smooth) {
+  const area = $('messagesArea');
+  requestAnimationFrame(() => {
+    area.scrollTo({ top: area.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+  });
 }
 
-// ─── بج نخوانده ───
-async function loadUnreadCounts() {
-  try {
-    const { data, error } = await supabase
-      .from('messages')
-      .select('conversation_id, sender_id, created_at');
-    if (error) return;
-
-    // برای هر کاربر، تعداد پیام‌های نخوانده (تقریبی)
-    const convIds = [...new Set((data || []).map(m => m.conversation_id))];
-    const counts = {};
-    (data || []).forEach(m => {
-      if (m.sender_id !== currentUser.id) {
-        counts[m.sender_id] = (counts[m.sender_id] || 0) + 1;
-      }
-    });
-    unreadCounts = counts;
-    updateFilterBadge();
-  } catch (e) {}
-}
-
-// ─── پروفایل ───
-function openProfileModal() {
-  $('profileDisplayName').value = currentProfile?.display_name || '';
-  $('profileUsername').value = currentProfile?.username || '';
-  const prev = $('avatarPreviewLg');
-  if (currentProfile?.avatar_url) {
-    prev.innerHTML = '';
-    const img = document.createElement('img');
-    img.src = currentProfile.avatar_url;
-    prev.appendChild(img);
-  } else {
-    prev.textContent = '👤';
-  }
-  $('profileModal').classList.add('show');
+// ═══════════════════ PROFILE ═══════════════════
+function setupProfileModal() {
+  $('profileClose').onclick = () => $('profileModal').style.display = 'none';
+  $('profileModal').onclick = (e) => { if (e.target.id === 'profileModal') $('profileModal').style.display = 'none'; };
+  $('profileSave').onclick = saveProfile;
+  $('avatarInput').onchange = (e) => {
+    const f = e.target.files[0];
+    if (f) previewAvatar(f);
+  };
 }
 
 let pendingAvatarFile = null;
 
-function uploadAvatarPreview(file) {
+function openProfileModal() {
+  $('profileDisplayName').value = currentProfile?.display_name || '';
+  $('profileUsername').value = currentProfile?.username || '';
+  const prev = $('avatarPreview');
+  if (currentProfile?.avatar_url) {
+    prev.innerHTML = '<img src="' + currentProfile.avatar_url + '">';
+  } else {
+    prev.textContent = getInitials(currentProfile?.display_name || '?');
+  }
+  $('profileModal').style.display = 'flex';
+}
+
+function previewAvatar(file) {
   pendingAvatarFile = file;
-  const prev = $('avatarPreviewLg');
+  const prev = $('avatarPreview');
   prev.innerHTML = '';
   const img = document.createElement('img');
   img.src = URL.createObjectURL(file);
@@ -991,13 +1350,12 @@ function uploadAvatarPreview(file) {
 
 async function saveProfile() {
   const displayName = $('profileDisplayName').value.trim();
-  const btn = $('profileSaveBtn');
+  const btn = $('profileSave');
   btn.disabled = true;
   btn.textContent = 'ذخیره...';
 
   try {
     let avatar_url = currentProfile?.avatar_url;
-
     if (pendingAvatarFile) {
       const ts = Date.now();
       const safe = pendingAvatarFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -1017,9 +1375,12 @@ async function saveProfile() {
     currentProfile.display_name = displayName;
     currentProfile.avatar_url = avatar_url;
     $('myName').textContent = displayName;
+    renderMyAvatar();
     pendingAvatarFile = null;
-    $('profileModal').classList.remove('show');
-    showToast('پروفایل ذخیره شد ✅', 'success');
+    $('profileModal').style.display = 'none';
+    showToast('ذخیره شد ✅', 'success');
+    await loadAllUsers();
+    await loadChatList();
   } catch (e) {
     showToast('خطا: ' + e.message, 'error');
   } finally {
@@ -1028,139 +1389,92 @@ async function saveProfile() {
   }
 }
 
-// ═══════════════════════════════════════════
-// هوک‌ها: اتصال به بخش‌های قبلی
-// ═══════════════════════════════════════════
+// ═══════════════════ LIGHTBOX ═══════════════════
+function openLightbox(url) {
+  $('lightboxImg').src = url;
+  $('lightbox').classList.add('show');
+}
+$('lightboxClose') && ($('lightboxClose').onclick = () => $('lightbox').classList.remove('show'));
+$('lightbox') && ($('lightbox').onclick = (e) => { if (e.target.id === 'lightbox') $('lightbox').classList.remove('show'); });
 
-
-
-// ═══════════════════════════════════════════
-// 🎨 فیلتر تب‌بار سایدبار
-// ═══════════════════════════════════════════
-function setupFilterTabs() {
-  document.querySelectorAll('.rubika-tabs button').forEach(btn => {
-    btn.onclick = () => {
-      document.querySelectorAll('.rubika-tabs button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentFilter = btn.dataset.tab;
-      renderUsers($('searchInput').value);
-    };
-  });
+// ═══════════════════ MISC ═══════════════════
+async function markAsRead() {
+  if (!currentConversation) return;
+  await supabase.from('messages').update({ read_at: new Date().toISOString() })
+    .eq('conversation_id', currentConversation.id)
+    .neq('sender_id', currentUser.id).is('read_at', null);
+  const item = chatList.find(i => i.conversation?.id === currentConversation.id);
+  if (item) item.unread = 0;
+  updateUnreadTabBadge();
 }
 
-function applyFilter(users) {
-  if (currentFilter === 'online') {
-    return users.filter(u => u.is_online);
-  }
-  if (currentFilter === 'unread') {
-    return users.filter(u => (unreadCounts[u.id] || 0) > 0);
-  }
-  return users;
-}
-
-function updateFilterBadge() {
-  const unreadBtn = document.querySelector('.rubika-tabs button[data-tab="unread"]');
-  if (!unreadBtn) return;
-  const total = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
-  let badge = unreadBtn.querySelector('.tab-badge');
-  if (total > 0) {
-    if (!badge) {
-      badge = document.createElement('span');
-      badge.className = 'tab-badge';
-      unreadBtn.appendChild(badge);
-    }
-    badge.textContent = total > 99 ? '99+' : total;
-  } else if (badge) {
-    badge.remove();
-  }
-}
-
-// ═══════════════════════════════════════════
-// 🎨 نوار تاریخ بین پیام‌ها
-// ═══════════════════════════════════════════
-function shouldShowDate(currentMsg, prevMsg) {
-  if (!prevMsg) return true;
-  const d1 = new Date(currentMsg.created_at);
-  const d2 = new Date(prevMsg.created_at);
-  return d1.toDateString() !== d2.toDateString();
-}
-
-function formatDateSeparator(dateStr) {
-  const d = new Date(dateStr);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
-  if (msgDay.getTime() === today.getTime()) return 'امروز';
-  if (msgDay.getTime() === yesterday.getTime()) return 'دیروز';
-
-  // محاسبه اختلاف روزها
-  const diffDays = Math.floor((today - msgDay) / (1000 * 60 * 60 * 24));
-  if (diffDays < 7) {
-    const days = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
-    return days[d.getDay()];
-  }
-
-  const months = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
-                  'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
-  // تبدیل میلادی به شمسی (تقریبی - از Intl استفاده می‌کنیم)
-  try {
-    return new Intl.DateTimeFormat('fa-IR', {
-      year: 'numeric', month: 'long', day: 'numeric'
-    }).format(d);
-  } catch (e) {
-    return d.toLocaleDateString('fa-IR');
-  }
-}
-
-// ═══════════════════════════════════════════
-// 🎨 FAB (دکمه شناور)
-// ═══════════════════════════════════════════
-function setupFAB() {
-  const fab = $('fabNewChat');
-  if (!fab) return;
-  fab.onclick = () => {
-    // اسکرول به لیست کاربران
-    $('sidebar').classList.remove('hidden');
-    setTimeout(() => {
-      const firstUser = document.querySelector('.user-item');
-      if (firstUser) firstUser.click();
-    }, 200);
-  };
-}
-
-// ═══════════════════════════════════════════
-// 🎨 تب‌بار موبایل
-// ═══════════════════════════════════════════
-function setupMobileTabbar() {
-  const tabbar = $('mobileTabbar');
-  if (!tabbar) return;
-
-  tabbar.querySelectorAll('button').forEach(btn => {
-    btn.onclick = () => {
-      tabbar.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      const tab = btn.dataset.tab;
-
-      if (tab === 'chats' || tab === 'contacts') {
-        $('sidebar').classList.remove('hidden');
-        document.body.classList.remove('in-chat');
-      } else if (tab === 'profile') {
-        openProfileModal();
+function broadcastTyping() {
+  if (!currentConversation) return;
+  if (!typingChannel) {
+    typingChannel = supabase.channel('typing-' + currentConversation.id);
+    typingChannel.on('broadcast', { event: 'typing' }, ({ payload }) => {
+      if (payload.user_id !== currentUser.id) {
+        $('typingRow').style.display = 'flex';
+        $('chatStatus').textContent = 'در حال نوشتن...';
+        $('chatStatus').classList.add('typing');
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(() => {
+          $('typingRow').style.display = 'none';
+          updateChatStatus();
+        }, 2500);
       }
-    };
-  });
-}
-
-// ─── تغییر وضعیت in-chat ───
-function setInChat(inChat) {
-  if (inChat) {
-    document.body.classList.add('in-chat');
-  } else {
-    document.body.classList.remove('in-chat');
+    }).subscribe();
   }
+  typingChannel.send({ type: 'broadcast', event: 'typing', payload: { user_id: currentUser.id } });
 }
 
+// صدا
+function playMsgSound() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    o.frequency.setValueAtTime(880, audioCtx.currentTime);
+    o.frequency.setValueAtTime(660, audioCtx.currentTime + 0.08);
+    g.gain.setValueAtTime(0.12, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+    o.start(); o.stop(audioCtx.currentTime + 0.25);
+  } catch (e) {}
+}
+function playSendSound() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    o.frequency.setValueAtTime(440, audioCtx.currentTime);
+    o.frequency.setValueAtTime(880, audioCtx.currentTime + 0.08);
+    g.gain.setValueAtTime(0.06, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
+    o.start(); o.stop(audioCtx.currentTime + 0.18);
+  } catch (e) {}
+}
+
+// اعلان
+async function requestNotifPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') { notificationGranted = true; return; }
+  if (Notification.permission === 'denied') return;
+  const p = await Notification.requestPermission();
+  notificationGranted = p === 'granted';
+}
+
+function notifyNewMessage(msg) {
+  if (!notificationGranted) return;
+  if (document.visibilityState === 'visible' && document.hasFocus()) return;
+  const sender = allUsers.find(u => u.id === msg.sender_id);
+  const name = sender?.display_name || sender?.username || 'پیام جدید';
+  const body = msg.content || (msg.attachment_type === 'image' ? '📷 عکس' : msg.attachment_type === 'video' ? '🎥 ویدیو' : msg.attachment_type === 'voice' ? '🎤 صدا' : '📄 فایل');
+  try {
+    new Notification(name, { body: body.substring(0, 100), tag: 'msg-' + msg.id, silent: false });
+  } catch (e) {}
+}
+
+// ═══════════════════ START ═══════════════════
 init();
