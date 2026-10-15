@@ -3,6 +3,7 @@ import { supabase } from './supabase-client.js';
 import { requireAuth, signOut, getProfile } from './auth.js';
 import { showToast, formatTime, escapeHtml, getInitials, avatarColor } from './ui.js';
 import { compressFile, formatSize as fmtSize } from './compressor.js';
+import { playMsgSound, playSendSound } from './sounds.js';
 
 // ═══════════════════ STATE ═══════════════════
 let currentUser = null;
